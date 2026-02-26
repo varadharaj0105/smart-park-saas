@@ -91,7 +91,7 @@ export default function Landing() {
           {features.map((f) => (
             <div
               key={f.title}
-              className="bg-card border border-border rounded-lg p-6 hover:shadow-md transition-shadow"
+              className="bg-card border border-border rounded-lg p-6 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
             >
               <div className="h-12 w-12 rounded-lg bg-accent flex items-center justify-center text-accent-foreground mb-4">
                 {f.icon}

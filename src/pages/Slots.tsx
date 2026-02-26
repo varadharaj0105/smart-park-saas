@@ -82,7 +82,7 @@ export default function Slots() {
         {/* Slots grid */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {slots.map((slot) => (
-            <div key={slot.id} className="bg-card border border-border rounded-lg p-4 hover:shadow-md transition-shadow">
+            <div key={slot.id} className="bg-card border border-border rounded-lg p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-lg font-bold text-foreground">{slot.slot_number}</span>
                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusColors[slot.status]}`}>
