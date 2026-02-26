@@ -1,17 +1,25 @@
 // ============================================
-// User Dashboard
+// User Dashboard — with Charts
 // ============================================
 
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import StatCard from "@/components/StatCard";
-import { CalendarCheck, CreditCard, ParkingSquare, Building2, ArrowRight } from "lucide-react";
+import PeakHourCard from "@/components/PeakHourCard";
+import { CalendarCheck, CreditCard, ParkingSquare, Building2, ArrowRight, Map } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const demoCompanies = [
   { id: "1", name: "Downtown Parking Co." },
   { id: "2", name: "Airport Parking Ltd." },
   { id: "3", name: "Mall Parking Services" },
+];
+
+const bookingStats = [
+  { name: "Jan", bookings: 3 }, { name: "Feb", bookings: 5 },
+  { name: "Mar", bookings: 2 }, { name: "Apr", bookings: 7 },
+  { name: "May", bookings: 4 }, { name: "Jun", bookings: 6 },
 ];
 
 const myBookings = [
@@ -32,6 +40,23 @@ export default function DashboardUser() {
           <StatCard title="Active" value={1} icon={ParkingSquare} />
           <StatCard title="Total Spent" value="$85" icon={CreditCard} />
           <StatCard title="Companies" value={demoCompanies.length} icon={Building2} />
+        </div>
+
+        {/* Charts + Peak Hours */}
+        <div className="grid lg:grid-cols-2 gap-6">
+          <div className="bg-card border border-border rounded-lg p-6">
+            <h4 className="font-semibold text-foreground mb-4">My Booking History</h4>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={bookingStats}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", color: "hsl(var(--foreground))" }} />
+                <Bar dataKey="bookings" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <PeakHourCard />
         </div>
 
         {/* Select company */}
@@ -58,24 +83,19 @@ export default function DashboardUser() {
         </div>
 
         {/* Quick actions */}
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Link
-            to="/booking"
-            className="bg-card border border-border rounded-lg p-5 flex items-center gap-4 hover:shadow-md transition-shadow group"
-          >
-            <div className="h-10 w-10 rounded-lg bg-accent flex items-center justify-center text-accent-foreground">
-              <CalendarCheck className="h-5 w-5" />
-            </div>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <Link to="/booking" className="bg-card border border-border rounded-lg p-5 flex items-center gap-4 hover:shadow-md hover:-translate-y-0.5 transition-all group">
+            <div className="h-10 w-10 rounded-lg bg-accent flex items-center justify-center text-accent-foreground"><CalendarCheck className="h-5 w-5" /></div>
             <span className="font-medium text-foreground flex-1">Book a Slot</span>
             <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
           </Link>
-          <Link
-            to="/payments"
-            className="bg-card border border-border rounded-lg p-5 flex items-center gap-4 hover:shadow-md transition-shadow group"
-          >
-            <div className="h-10 w-10 rounded-lg bg-accent flex items-center justify-center text-accent-foreground">
-              <CreditCard className="h-5 w-5" />
-            </div>
+          <Link to="/map" className="bg-card border border-border rounded-lg p-5 flex items-center gap-4 hover:shadow-md hover:-translate-y-0.5 transition-all group">
+            <div className="h-10 w-10 rounded-lg bg-accent flex items-center justify-center text-accent-foreground"><Map className="h-5 w-5" /></div>
+            <span className="font-medium text-foreground flex-1">Parking Map</span>
+            <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+          </Link>
+          <Link to="/payments" className="bg-card border border-border rounded-lg p-5 flex items-center gap-4 hover:shadow-md hover:-translate-y-0.5 transition-all group">
+            <div className="h-10 w-10 rounded-lg bg-accent flex items-center justify-center text-accent-foreground"><CreditCard className="h-5 w-5" /></div>
             <span className="font-medium text-foreground flex-1">Payment History</span>
             <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
           </Link>
@@ -84,7 +104,7 @@ export default function DashboardUser() {
         {/* My bookings */}
         <div className="bg-card border border-border rounded-lg">
           <div className="px-6 py-4 border-b border-border">
-            <h3 className="font-semibold text-foreground">My Bookings</h3>
+            <h3 className="font-semibold text-foreground">My Recent Bookings</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -99,19 +119,13 @@ export default function DashboardUser() {
               </thead>
               <tbody>
                 {myBookings.map((b) => (
-                  <tr key={b.id} className="border-b border-border last:border-0 hover:bg-muted/50">
+                  <tr key={b.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
                     <td className="px-6 py-3 font-medium text-foreground">{b.id}</td>
                     <td className="px-6 py-3 text-foreground">{b.company}</td>
                     <td className="px-6 py-3 text-foreground">{b.slot}</td>
                     <td className="px-6 py-3 text-muted-foreground">{b.date}</td>
                     <td className="px-6 py-3">
-                      <span
-                        className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                          b.status === "Active"
-                            ? "bg-accent text-accent-foreground"
-                            : "bg-secondary text-secondary-foreground"
-                        }`}
-                      >
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${b.status === "Active" ? "bg-accent text-accent-foreground" : "bg-secondary text-secondary-foreground"}`}>
                         {b.status}
                       </span>
                     </td>

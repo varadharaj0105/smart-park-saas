@@ -1,10 +1,11 @@
 // ============================================
-// Super Admin Dashboard
+// Super Admin Dashboard — with Charts
 // ============================================
 
 import DashboardLayout from "@/components/DashboardLayout";
 import StatCard from "@/components/StatCard";
 import { Building2, Users, CalendarCheck, CreditCard } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 
 const stats = {
   companies: 8,
@@ -12,6 +13,23 @@ const stats = {
   bookings: 1420,
   revenue: "$32,800",
 };
+
+const companyRevenue = [
+  { name: "Downtown", revenue: 8200 },
+  { name: "Airport", revenue: 12400 },
+  { name: "Mall", revenue: 4100 },
+  { name: "University", revenue: 5600 },
+  { name: "Hotel", revenue: 2500 },
+];
+
+const systemStats = [
+  { name: "Jan", users: 180, bookings: 820 },
+  { name: "Feb", users: 210, bookings: 950 },
+  { name: "Mar", users: 230, bookings: 1100 },
+  { name: "Apr", users: 245, bookings: 1280 },
+  { name: "May", users: 250, bookings: 1350 },
+  { name: "Jun", users: 256, bookings: 1420 },
+];
 
 const tenants = [
   { id: "T1", name: "Downtown Parking Co.", users: 45, slots: 120, revenue: "$8,200", status: "Active" },
@@ -33,6 +51,38 @@ export default function DashboardSuperAdmin() {
           <StatCard title="Total Revenue" value={stats.revenue} icon={CreditCard} trend="up" trendValue="+15%" />
         </div>
 
+        {/* Charts */}
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Company Revenue Comparison */}
+          <div className="bg-card border border-border rounded-lg p-6">
+            <h4 className="font-semibold text-foreground mb-4">Company Revenue Comparison</h4>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={companyRevenue}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", color: "hsl(var(--foreground))" }} />
+                <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* System Growth */}
+          <div className="bg-card border border-border rounded-lg p-6">
+            <h4 className="font-semibold text-foreground mb-4">System Growth</h4>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={systemStats}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", color: "hsl(var(--foreground))" }} />
+                <Line type="monotone" dataKey="users" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="bookings" stroke="hsl(142, 71%, 45%)" strokeWidth={2} dot={{ r: 4 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
         {/* Tenants list */}
         <div className="bg-card border border-border rounded-lg">
           <div className="px-6 py-4 border-b border-border">
@@ -51,19 +101,13 @@ export default function DashboardSuperAdmin() {
               </thead>
               <tbody>
                 {tenants.map((t) => (
-                  <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/50">
+                  <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
                     <td className="px-6 py-3 font-medium text-foreground">{t.name}</td>
                     <td className="px-6 py-3 text-foreground">{t.users}</td>
                     <td className="px-6 py-3 text-foreground">{t.slots}</td>
                     <td className="px-6 py-3 text-foreground">{t.revenue}</td>
                     <td className="px-6 py-3">
-                      <span
-                        className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                          t.status === "Active"
-                            ? "bg-accent text-accent-foreground"
-                            : "bg-secondary text-secondary-foreground"
-                        }`}
-                      >
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${t.status === "Active" ? "bg-accent text-accent-foreground" : "bg-secondary text-secondary-foreground"}`}>
                         {t.status}
                       </span>
                     </td>
