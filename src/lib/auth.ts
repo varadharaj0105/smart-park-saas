@@ -81,3 +81,25 @@ export function getDashboardPath(role?: UserRole): string {
       return "/login";
   }
 }
+
+/**
+ * Map backend role strings to frontend roles.
+ * Backend may use: "super_admin", "company_admin", "customer".
+ * Frontend uses: "superadmin", "admin", "user".
+ */
+export function mapBackendRoleToUserRole(role: string): UserRole {
+  switch (role) {
+    case "super_admin":
+      return "superadmin";
+    case "company_admin":
+      return "admin";
+    case "customer":
+      return "user";
+    case "superadmin":
+    case "admin":
+    case "user":
+      return role;
+    default:
+      return "user";
+  }
+}

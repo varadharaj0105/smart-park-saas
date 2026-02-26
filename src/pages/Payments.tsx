@@ -2,42 +2,69 @@
 // Payments Page — Enhanced with payment methods
 // ============================================
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import StatCard from "@/components/StatCard";
 import { useNotification } from "@/components/NotificationProvider";
 import { getAuth } from "@/lib/auth";
 import { CreditCard, DollarSign, Receipt, TrendingUp, Plus, X, Search } from "lucide-react";
+import { apiExitBooking, apiGetPayments } from "@/lib/api";
 
-const payments = [
-  { id: "P001", booking: "B001", amount: "$15.00", method: "Card", date: "2026-02-24", status: "Paid" },
-  { id: "P002", booking: "B002", amount: "$25.00", method: "Card", date: "2026-02-23", status: "Paid" },
-  { id: "P003", booking: "B003", amount: "$10.00", method: "Cash", date: "2026-02-22", status: "Paid" },
-  { id: "P004", booking: "B004", amount: "$40.00", method: "UPI", date: "2026-02-21", status: "Pending" },
-  { id: "P005", booking: "B005", amount: "$20.00", method: "UPI", date: "2026-02-20", status: "Paid" },
-  { id: "P006", booking: "B006", amount: "$30.00", method: "Card", date: "2026-02-19", status: "Refunded" },
-];
+interface PaymentRow {
+  id: number;
+  booking_id: number;
+  amount: number;
+  method: string;
+  status: "paid" | "pending" | "refunded";
+  created_at: string;
+}
 
 export default function Payments() {
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [search, setSearch] = useState("");
   const [showPayModal, setShowPayModal] = useState(false);
   const [payForm, setPayForm] = useState({ booking_id: "", amount: "", method: "Card" });
+  const [loading, setLoading] = useState(false);
   const { showNotification } = useNotification();
   const auth = getAuth();
   const role = auth?.role || "user";
 
+  const loadPayments = async () => {
+    try {
+      const result = await apiGetPayments();
+      setPayments(result.data || result);
+    } catch (error: any) {
+      showNotification(error.message || "Failed to load payments", "error");
+    }
+  };
+
+  useEffect(() => {
+    loadPayments();
+  }, []);
+
   const filtered = payments.filter(
-    (p) => p.id.toLowerCase().includes(search.toLowerCase()) || p.booking.toLowerCase().includes(search.toLowerCase())
+    (p) =>
+      String(p.id).toLowerCase().includes(search.toLowerCase()) ||
+      String(p.booking_id).toLowerCase().includes(search.toLowerCase()),
   );
 
-  const handlePay = () => {
-    if (!payForm.booking_id || !payForm.amount) {
+  const handlePay = async () => {
+    if (!payForm.booking_id) {
       showNotification("Please fill all fields", "warning");
       return;
     }
-    showNotification("Payment recorded successfully!", "success");
-    setShowPayModal(false);
-    setPayForm({ booking_id: "", amount: "", method: "Card" });
+    try {
+      setLoading(true);
+      await apiExitBooking(payForm.booking_id, payForm.method.toLowerCase());
+      showNotification("Payment recorded successfully!", "success");
+      setShowPayModal(false);
+      setPayForm({ booking_id: "", amount: "", method: "Card" });
+      await loadPayments();
+    } catch (error: any) {
+      showNotification(error.message || "Failed to record payment", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -60,10 +87,22 @@ export default function Payments() {
 
         {/* Stats */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard title="Total Revenue" value="$140.00" icon={DollarSign} trend="up" trendValue="+12%" />
+          <StatCard
+            title="Total Revenue"
+            value={
+              "$" +
+              payments
+                .filter((p) => p.status === "paid")
+                .reduce((sum, p) => sum + p.amount, 0)
+                .toFixed(2)
+            }
+            icon={DollarSign}
+            trend="up"
+            trendValue="+"
+          />
           <StatCard title="Transactions" value={payments.length} icon={Receipt} />
-          <StatCard title="Paid" value={payments.filter((p) => p.status === "Paid").length} icon={CreditCard} />
-          <StatCard title="Pending" value={payments.filter((p) => p.status === "Pending").length} icon={TrendingUp} />
+          <StatCard title="Paid" value={payments.filter((p) => p.status === "paid").length} icon={CreditCard} />
+          <StatCard title="Pending" value={payments.filter((p) => p.status === "pending").length} icon={TrendingUp} />
         </div>
 
         {/* Search */}
@@ -95,19 +134,23 @@ export default function Payments() {
                 {filtered.map((p) => (
                   <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
                     <td className="px-6 py-3 font-medium text-foreground">{p.id}</td>
-                    <td className="px-6 py-3 text-foreground">{p.booking}</td>
-                    <td className="px-6 py-3 font-semibold text-foreground">{p.amount}</td>
+                    <td className="px-6 py-3 text-foreground">{p.booking_id}</td>
+                    <td className="px-6 py-3 font-semibold text-foreground">${p.amount.toFixed(2)}</td>
                     <td className="px-6 py-3">
                       <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
                         {p.method}
                       </span>
                     </td>
-                    <td className="px-6 py-3 text-muted-foreground">{p.date}</td>
+                    <td className="px-6 py-3 text-muted-foreground">
+                      {new Date(p.created_at).toLocaleDateString()}
+                    </td>
                     <td className="px-6 py-3">
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                        p.status === "Paid" ? "bg-success/10 text-success"
-                        : p.status === "Pending" ? "bg-warning/10 text-warning"
-                        : "bg-secondary text-secondary-foreground"
+                        p.status === "paid"
+                          ? "bg-success/10 text-success"
+                          : p.status === "pending"
+                          ? "bg-warning/10 text-warning"
+                          : "bg-secondary text-secondary-foreground"
                       }`}>
                         {p.status}
                       </span>
@@ -172,9 +215,10 @@ export default function Payments() {
                 </div>
                 <button
                   onClick={handlePay}
-                  className="w-full h-10 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity"
+                  disabled={loading}
+                  className="w-full h-10 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
                 >
-                  Confirm Payment
+                  {loading ? "Processing..." : "Confirm Payment"}
                 </button>
               </div>
             </div>

@@ -2,32 +2,39 @@
 // Booking Page
 // ============================================
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useNotification } from "@/components/NotificationProvider";
 import { CalendarCheck, Car } from "lucide-react";
+import { apiCreateBooking, apiGetSlots } from "@/lib/api";
 
 interface AvailableSlot {
-  id: string;
+  id: number;
   slot_number: string;
   floor: string;
   type: string;
 }
 
-const demoAvailable: AvailableSlot[] = [
-  { id: "1", slot_number: "A-01", floor: "1", type: "Car" },
-  { id: "3", slot_number: "A-03", floor: "1", type: "Car" },
-  { id: "4", slot_number: "B-01", floor: "2", type: "Bike" },
-  { id: "7", slot_number: "C-02", floor: "3", type: "Car" },
-  { id: "8", slot_number: "C-03", floor: "3", type: "SUV" },
-];
-
 export default function Booking() {
-  const [selectedSlot, setSelectedSlot] = useState<string>("");
+  const [slots, setSlots] = useState<AvailableSlot[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [vehicle, setVehicle] = useState("");
   const [duration, setDuration] = useState("1");
   const [loading, setLoading] = useState(false);
   const { showNotification } = useNotification();
+
+  const loadSlots = async () => {
+    try {
+      const result = await apiGetSlots();
+      setSlots(result.data || result);
+    } catch (error: any) {
+      showNotification(error.message || "Failed to load slots", "error");
+    }
+  };
+
+  useEffect(() => {
+    loadSlots();
+  }, []);
 
   const handleBook = async () => {
     if (!selectedSlot || !vehicle) {
@@ -35,14 +42,24 @@ export default function Booking() {
       return;
     }
     setLoading(true);
-    // Simulating API call
-    setTimeout(() => {
+    try {
+      const slotId = selectedSlot;
+      const startTime = new Date().toISOString().slice(0, 19).replace("T", " ");
+      await apiCreateBooking({
+        slot_id: String(slotId),
+        vehicle_number: vehicle,
+        start_time: startTime,
+        duration: Number(duration),
+      });
       showNotification("Booking confirmed!", "success");
-      setSelectedSlot("");
+      setSelectedSlot(null);
       setVehicle("");
       setDuration("1");
+    } catch (error: any) {
+      showNotification(error.message || "Failed to create booking", "error");
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -59,7 +76,7 @@ export default function Booking() {
             <div className="bg-card border border-border rounded-lg p-6">
               <h4 className="font-semibold text-foreground mb-4">Available Slots</h4>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {demoAvailable.map((slot) => (
+                {slots.map((slot) => (
                   <button
                     key={slot.id}
                     onClick={() => setSelectedSlot(slot.id)}
@@ -92,7 +109,7 @@ export default function Booking() {
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Selected Slot</label>
                 <input
                   readOnly
-                  value={demoAvailable.find((s) => s.id === selectedSlot)?.slot_number || "None selected"}
+                  value={slots.find((s) => s.id === selectedSlot)?.slot_number || "None selected"}
                   className="w-full h-10 px-3 rounded-lg border border-input bg-muted text-foreground text-sm"
                 />
               </div>

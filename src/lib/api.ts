@@ -49,7 +49,7 @@ async function apiFetch(
 // ============================================
 
 export async function apiLogin(email: string, password: string) {
-  return apiFetch("/login", {
+  return apiFetch("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
@@ -62,7 +62,7 @@ export async function apiSignup(data: {
   role?: string;
   company_name?: string;
 }) {
-  return apiFetch("/signup", {
+  return apiFetch("/auth/signup", {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -72,9 +72,8 @@ export async function apiSignup(data: {
 // Slots API calls
 // ============================================
 
-export async function apiGetSlots(tenantId?: string) {
-  const query = tenantId ? `?tenant_id=${tenantId}` : "";
-  return apiFetch(`/slots${query}`);
+export async function apiGetSlots() {
+  return apiFetch("/admin/slots");
 }
 
 export async function apiCreateSlot(data: {
@@ -82,7 +81,7 @@ export async function apiCreateSlot(data: {
   floor: string;
   type: string;
 }) {
-  return apiFetch("/slots", {
+  return apiFetch("/admin/slots", {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -92,7 +91,7 @@ export async function apiUpdateSlot(
   slotId: string,
   data: { status?: string; slot_number?: string }
 ) {
-  return apiFetch(`/slots/${slotId}`, {
+  return apiFetch(`/admin/slots/${slotId}`, {
     method: "PUT",
     body: JSON.stringify(data),
   });
@@ -109,7 +108,7 @@ export async function apiDeleteSlot(slotId: string) {
 // ============================================
 
 export async function apiGetBookings() {
-  return apiFetch("/bookings");
+  return apiFetch("/user/bookings");
 }
 
 export async function apiCreateBooking(data: {
@@ -118,15 +117,23 @@ export async function apiCreateBooking(data: {
   start_time: string;
   duration: number;
 }) {
-  return apiFetch("/bookings", {
+  return apiFetch("/user/bookings", {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
 export async function apiCancelBooking(bookingId: string) {
-  return apiFetch(`/bookings/${bookingId}`, {
+  return apiFetch(`/user/bookings/${bookingId}`, {
     method: "DELETE",
+  });
+}
+
+// Complete a booking and create payment (exit flow)
+export async function apiExitBooking(bookingId: string, method: string = "card") {
+  return apiFetch(`/user/bookings/${bookingId}/exit`, {
+    method: "POST",
+    body: JSON.stringify({ method }),
   });
 }
 
@@ -135,7 +142,7 @@ export async function apiCancelBooking(bookingId: string) {
 // ============================================
 
 export async function apiGetPayments() {
-  return apiFetch("/payments");
+  return apiFetch("/user/payments");
 }
 
 // ============================================
@@ -143,15 +150,15 @@ export async function apiGetPayments() {
 // ============================================
 
 export async function apiGetDashboardStats() {
-  return apiFetch("/dashboard/stats");
+  return apiFetch("/admin/dashboard/stats");
 }
 
 export async function apiGetCompanies() {
-  return apiFetch("/companies");
+  return apiFetch("/super/companies");
 }
 
 export async function apiGetUsers() {
-  return apiFetch("/users");
+  return apiFetch("/super/users");
 }
 
 export { API_BASE };

@@ -2,34 +2,25 @@
 // Slots Management Page (Admin)
 // ============================================
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useNotification } from "@/components/NotificationProvider";
 import { Plus, Trash2, Edit2, X } from "lucide-react";
+import { apiCreateSlot, apiDeleteSlot, apiGetSlots } from "@/lib/api";
 
 interface Slot {
-  id: string;
+  id: number;
   slot_number: string;
   floor: string;
   type: string;
   status: "available" | "occupied" | "maintenance";
 }
 
-const demoSlots: Slot[] = [
-  { id: "1", slot_number: "A-01", floor: "1", type: "Car", status: "available" },
-  { id: "2", slot_number: "A-02", floor: "1", type: "Car", status: "occupied" },
-  { id: "3", slot_number: "A-03", floor: "1", type: "Car", status: "available" },
-  { id: "4", slot_number: "B-01", floor: "2", type: "Bike", status: "available" },
-  { id: "5", slot_number: "B-02", floor: "2", type: "Bike", status: "maintenance" },
-  { id: "6", slot_number: "C-01", floor: "3", type: "Car", status: "occupied" },
-  { id: "7", slot_number: "C-02", floor: "3", type: "Car", status: "available" },
-  { id: "8", slot_number: "C-03", floor: "3", type: "SUV", status: "available" },
-];
-
 export default function Slots() {
-  const [slots, setSlots] = useState<Slot[]>(demoSlots);
+  const [slots, setSlots] = useState<Slot[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [newSlot, setNewSlot] = useState({ slot_number: "", floor: "", type: "Car" });
+  const [loading, setLoading] = useState(false);
   const { showNotification } = useNotification();
 
   const statusColors: Record<string, string> = {
@@ -38,23 +29,50 @@ export default function Slots() {
     maintenance: "bg-warning/10 text-warning",
   };
 
-  const addSlot = () => {
+  const loadSlots = async () => {
+    try {
+      const result = await apiGetSlots();
+      // Backend returns { success, data: [...] }
+      setSlots(result.data || result);
+    } catch (error: any) {
+      showNotification(error.message || "Failed to load slots", "error");
+    }
+  };
+
+  useEffect(() => {
+    loadSlots();
+  }, []);
+
+  const addSlot = async () => {
     if (!newSlot.slot_number || !newSlot.floor) {
       showNotification("Please fill all fields", "warning");
       return;
     }
-    setSlots((prev) => [
-      ...prev,
-      { id: String(Date.now()), ...newSlot, status: "available" },
-    ]);
-    setNewSlot({ slot_number: "", floor: "", type: "Car" });
-    setShowModal(false);
-    showNotification("Slot added successfully", "success");
+    try {
+      setLoading(true);
+      await apiCreateSlot(newSlot);
+      showNotification("Slot added successfully", "success");
+      setNewSlot({ slot_number: "", floor: "", type: "Car" });
+      setShowModal(false);
+      await loadSlots();
+    } catch (error: any) {
+      showNotification(error.message || "Failed to add slot", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const deleteSlot = (id: string) => {
-    setSlots((prev) => prev.filter((s) => s.id !== id));
-    showNotification("Slot deleted", "info");
+  const deleteSlot = async (id: number) => {
+    try {
+      setLoading(true);
+      await apiDeleteSlot(String(id));
+      showNotification("Slot deleted", "info");
+      await loadSlots();
+    } catch (error: any) {
+      showNotification(error.message || "Failed to delete slot", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const available = slots.filter((s) => s.status === "available").length;
@@ -73,6 +91,7 @@ export default function Slots() {
           </div>
           <button
             onClick={() => setShowModal(true)}
+            disabled={loading}
             className="inline-flex items-center gap-2 px-4 h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
           >
             <Plus className="h-4 w-4" /> Add Slot
@@ -97,6 +116,7 @@ export default function Slots() {
                 </button>
                 <button
                   onClick={() => deleteSlot(slot.id)}
+                  disabled={loading}
                   className="h-8 w-8 rounded-md border border-border text-destructive hover:bg-destructive/10 transition-colors inline-flex items-center justify-center"
                 >
                   <Trash2 className="h-3 w-3" />
@@ -150,9 +170,10 @@ export default function Slots() {
                 </div>
                 <button
                   onClick={addSlot}
+                  disabled={loading}
                   className="w-full h-10 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity"
                 >
-                  Add Slot
+                  {loading ? "Saving..." : "Add Slot"}
                 </button>
               </div>
             </div>

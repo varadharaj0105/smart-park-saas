@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Car, Eye, EyeOff } from "lucide-react";
 import { apiLogin } from "@/lib/api";
-import { saveAuth, getDashboardPath } from "@/lib/auth";
+import { saveAuth, getDashboardPath, mapBackendRoleToUserRole } from "@/lib/auth";
 import { useNotification } from "@/components/NotificationProvider";
 
 export default function Login() {
@@ -27,9 +27,10 @@ export default function Login() {
     setLoading(true);
     try {
       const data = await apiLogin(email, password);
-      saveAuth(data);
+      const mappedRole = mapBackendRoleToUserRole(data.role);
+      saveAuth({ ...data, role: mappedRole });
       showNotification("Login successful!", "success");
-      navigate(getDashboardPath(data.role));
+      navigate(getDashboardPath(mappedRole));
     } catch (err: any) {
       showNotification(err.message || "Login failed", "error");
     } finally {

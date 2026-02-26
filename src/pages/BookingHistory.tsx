@@ -2,35 +2,48 @@
 // Booking History Page
 // ============================================
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Search, Filter, CalendarCheck } from "lucide-react";
+import { apiGetBookings } from "@/lib/api";
 
-const demoHistory = [
-  { id: "B001", vehicle: "ABC-1234", slot: "A-12", company: "Downtown Parking Co.", date: "2026-02-24", duration: "3h", cost: "$15.00", status: "Active" },
-  { id: "B002", vehicle: "XYZ-5678", slot: "B-05", company: "Airport Parking Ltd.", date: "2026-02-23", duration: "2h", cost: "$10.00", status: "Completed" },
-  { id: "B003", vehicle: "DEF-9012", slot: "C-08", company: "Downtown Parking Co.", date: "2026-02-22", duration: "5h", cost: "$25.00", status: "Completed" },
-  { id: "B004", vehicle: "GHI-3456", slot: "A-03", company: "Mall Parking Services", date: "2026-02-21", duration: "1h", cost: "$5.00", status: "Cancelled" },
-  { id: "B005", vehicle: "JKL-7890", slot: "D-01", company: "Airport Parking Ltd.", date: "2026-02-20", duration: "4h", cost: "$20.00", status: "Completed" },
-  { id: "B006", vehicle: "MNO-2345", slot: "B-03", company: "Downtown Parking Co.", date: "2026-02-19", duration: "6h", cost: "$30.00", status: "Completed" },
-];
+interface BookingRow {
+  id: number;
+  vehicle_number: string;
+  slot_id: number;
+  start_time: string;
+  duration: number;
+  status: "active" | "completed" | "cancelled";
+  total_amount: number | null;
+}
 
 export default function BookingHistory() {
+  const [rows, setRows] = useState<BookingRow[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const filtered = demoHistory.filter((b) => {
-    const matchesSearch = b.vehicle.toLowerCase().includes(search.toLowerCase()) ||
-      b.slot.toLowerCase().includes(search.toLowerCase()) ||
-      b.company.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "all" || b.status.toLowerCase() === statusFilter;
+  useEffect(() => {
+    apiGetBookings()
+      .then((result) => {
+        setRows(result.data || result);
+      })
+      .catch(() => {
+        setRows([]);
+      });
+  }, []);
+
+  const filtered = rows.filter((b) => {
+    const matchesSearch =
+      b.vehicle_number.toLowerCase().includes(search.toLowerCase()) ||
+      String(b.slot_id).toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === "all" || b.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   const statusColors: Record<string, string> = {
-    Active: "bg-accent text-accent-foreground",
-    Completed: "bg-success/10 text-success",
-    Cancelled: "bg-destructive/10 text-destructive",
+    active: "bg-accent text-accent-foreground",
+    completed: "bg-success/10 text-success",
+    cancelled: "bg-destructive/10 text-destructive",
   };
 
   return (
@@ -95,12 +108,16 @@ export default function BookingHistory() {
                   filtered.map((b) => (
                     <tr key={b.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
                       <td className="px-6 py-3 font-medium text-foreground">{b.id}</td>
-                      <td className="px-6 py-3 text-foreground">{b.vehicle}</td>
-                      <td className="px-6 py-3 text-foreground">{b.slot}</td>
-                      <td className="px-6 py-3 text-foreground">{b.company}</td>
-                      <td className="px-6 py-3 text-muted-foreground">{b.date}</td>
-                      <td className="px-6 py-3 text-muted-foreground">{b.duration}</td>
-                      <td className="px-6 py-3 font-semibold text-foreground">{b.cost}</td>
+                      <td className="px-6 py-3 text-foreground">{b.vehicle_number}</td>
+                      <td className="px-6 py-3 text-foreground">{b.slot_id}</td>
+                      <td className="px-6 py-3 text-foreground">—</td>
+                      <td className="px-6 py-3 text-muted-foreground">
+                        {new Date(b.start_time).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-3 text-muted-foreground">{b.duration}h</td>
+                      <td className="px-6 py-3 font-semibold text-foreground">
+                        {b.total_amount != null ? `$${b.total_amount.toFixed(2)}` : "-"}
+                      </td>
                       <td className="px-6 py-3">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[b.status] || "bg-secondary text-secondary-foreground"}`}>
                           {b.status}
