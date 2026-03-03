@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment secrets — NEVER commit these
+.env
+.env.local
+.env.production
+
+# DB dumps with real data — keep local only
+backend/production_data.sql

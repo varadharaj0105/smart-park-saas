@@ -38,19 +38,7 @@ export default function Login() {
     }
   };
 
-  // Demo login for testing without backend
-  const demoLogin = (role: "superadmin" | "admin" | "user") => {
-    saveAuth({
-      token: "demo-token",
-      role,
-      tenant_id: "tenant-1",
-      user_id: "user-1",
-      name: role === "superadmin" ? "Super Admin" : role === "admin" ? "Company Admin" : "John User",
-      email: `${role}@demo.com`,
-    });
-    showNotification(`Logged in as ${role}`, "success");
-    navigate(getDashboardPath(role));
-  };
+
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -117,21 +105,7 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Demo buttons */}
-        <div className="mt-6 bg-card border border-border rounded-xl p-4">
-          <p className="text-xs text-muted-foreground text-center mb-3">Demo Login (no backend needed)</p>
-          <div className="grid grid-cols-3 gap-2">
-            {(["superadmin", "admin", "user"] as const).map((role) => (
-              <button
-                key={role}
-                onClick={() => demoLogin(role)}
-                className="px-3 py-2 rounded-lg border border-border text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground transition-colors capitalize"
-              >
-                {role}
-              </button>
-            ))}
-          </div>
-        </div>
+
       </div>
     </div>
   );

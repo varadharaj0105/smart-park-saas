@@ -2,50 +2,64 @@
 // Company Admin Dashboard — with Charts
 // ============================================
 
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import StatCard from "@/components/StatCard";
 import PeakHourCard from "@/components/PeakHourCard";
 import { ParkingSquare, CalendarCheck, CreditCard, Car, ArrowRight } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-
-const stats = {
-  totalSlots: 120,
-  availableSlots: 43,
-  bookings: 77,
-  revenue: "$4,230",
-};
-
-const revenueData = [
-  { name: "Mon", revenue: 520 }, { name: "Tue", revenue: 680 },
-  { name: "Wed", revenue: 590 }, { name: "Thu", revenue: 820 },
-  { name: "Fri", revenue: 940 }, { name: "Sat", revenue: 450 },
-  { name: "Sun", revenue: 330 },
-];
-
-const slotUsage = [
-  { name: "Available", value: 43, color: "hsl(142, 71%, 45%)" },
-  { name: "Occupied", value: 65, color: "hsl(234, 80%, 60%)" },
-  { name: "Maintenance", value: 12, color: "hsl(38, 92%, 50%)" },
-];
-
-const recentBookings = [
-  { id: "B001", vehicle: "ABC-1234", slot: "A-12", time: "10:00 AM", status: "Active" },
-  { id: "B002", vehicle: "XYZ-5678", slot: "B-05", time: "11:30 AM", status: "Active" },
-  { id: "B003", vehicle: "DEF-9012", slot: "C-08", time: "09:00 AM", status: "Completed" },
-  { id: "B004", vehicle: "GHI-3456", slot: "A-03", time: "02:00 PM", status: "Active" },
-];
+import { apiGetDashboardStats, apiGetBookings } from "@/lib/api";
 
 export default function DashboardAdmin() {
+  const [stats, setStats] = useState({
+    totalSlots: 0,
+    availableSlots: 0,
+    totalBookings: 0,
+    totalRevenue: 0,
+  });
+  const [recentBookings, setRecentBookings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      apiGetDashboardStats().catch(() => ({ data: { totalSlots: 0, availableSlots: 0, totalBookings: 0, totalRevenue: 0 } })),
+      apiGetBookings().catch(() => ({ data: [] }))
+    ]).then(([statsRes, bookingsRes]) => {
+      setStats(statsRes.data || statsRes);
+
+      const ALL_BOOKINGS = bookingsRes.data || bookingsRes;
+      if (Array.isArray(ALL_BOOKINGS)) {
+        setRecentBookings(ALL_BOOKINGS.slice(0, 5));
+      }
+      setLoading(false);
+    });
+  }, []);
+  // In case available slots somehow exceeds total slots
+  const occupied = Math.max(0, stats.totalSlots - stats.availableSlots);
+  const available = Math.max(0, stats.availableSlots);
+  const slotUsage = [
+    { name: "Available", value: available, color: "hsl(142, 71%, 45%)" },
+    { name: "Occupied", value: occupied, color: "hsl(234, 80%, 60%)" },
+  ];
+
+  // Dummy revenue data just for visual aesthetics
+  const revenueData = [
+    { name: "Mon", revenue: 520 }, { name: "Tue", revenue: 680 },
+    { name: "Wed", revenue: 590 }, { name: "Thu", revenue: 820 },
+    { name: "Fri", revenue: 940 }, { name: "Sat", revenue: 450 },
+    { name: "Sun", revenue: 330 },
+  ];
+
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 animate-fade-in">
         {/* Stats */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard title="Total Slots" value={stats.totalSlots} icon={ParkingSquare} description="All parking slots" />
-          <StatCard title="Available" value={stats.availableSlots} icon={Car} trend="up" trendValue="5 more today" />
-          <StatCard title="Bookings" value={stats.bookings} icon={CalendarCheck} trend="up" trendValue="+12%" />
-          <StatCard title="Revenue" value={stats.revenue} icon={CreditCard} trend="up" trendValue="+8% this month" />
+          <StatCard title="Available" value={stats.availableSlots} icon={Car} />
+          <StatCard title="Total Bookings" value={stats.totalBookings} icon={CalendarCheck} />
+          <StatCard title="Total Revenue" value={`$${Number(stats.totalRevenue).toFixed(2)}`} icon={CreditCard} />
         </div>
 
         {/* Charts */}
@@ -70,14 +84,20 @@ export default function DashboardAdmin() {
           <div className="bg-card border border-border rounded-lg p-6">
             <h4 className="font-semibold text-foreground mb-4">Slot Usage</h4>
             <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie data={slotUsage} cx="50%" cy="50%" innerRadius={60} outerRadius={90} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
-                  {slotUsage.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
+              {stats.totalSlots > 0 ? (
+                <PieChart>
+                  <Pie data={slotUsage} cx="50%" cy="50%" innerRadius={60} outerRadius={90} dataKey="value" stroke="none" label={({ name, value }) => `${name} (${value})`}>
+                    {slotUsage.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: "8px", border: "none" }} />
+                </PieChart>
+              ) : (
+                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                  No slots created yet
+                </div>
+              )}
             </ResponsiveContainer>
           </div>
         </div>
@@ -89,7 +109,7 @@ export default function DashboardAdmin() {
         <div className="grid sm:grid-cols-3 gap-4">
           {[
             { label: "Manage Slots", path: "/slots", icon: ParkingSquare },
-            { label: "View Bookings", path: "/booking", icon: CalendarCheck },
+            { label: "View Bookings", path: "/booking-history", icon: CalendarCheck },
             { label: "Payments", path: "/payments", icon: CreditCard },
           ].map((a) => (
             <Link
@@ -123,19 +143,27 @@ export default function DashboardAdmin() {
                 </tr>
               </thead>
               <tbody>
-                {recentBookings.map((b) => (
-                  <tr key={b.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
-                    <td className="px-6 py-3 font-medium text-foreground">{b.id}</td>
-                    <td className="px-6 py-3 text-foreground">{b.vehicle}</td>
-                    <td className="px-6 py-3 text-foreground">{b.slot}</td>
-                    <td className="px-6 py-3 text-muted-foreground">{b.time}</td>
-                    <td className="px-6 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${b.status === "Active" ? "bg-accent text-accent-foreground" : "bg-secondary text-secondary-foreground"}`}>
-                        {b.status}
-                      </span>
+                {recentBookings.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-4 text-center text-muted-foreground text-sm">
+                      No recent bookings found.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  recentBookings.map((b) => (
+                    <tr key={b.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
+                      <td className="px-6 py-3 font-medium text-foreground">{b.id}</td>
+                      <td className="px-6 py-3 text-foreground">{b.vehicle_number}</td>
+                      <td className="px-6 py-3 text-foreground">{b.slot_id}</td>
+                      <td className="px-6 py-3 text-muted-foreground">{new Date(b.start_time).toLocaleString()}</td>
+                      <td className="px-6 py-3">
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${b.status === "active" ? "bg-accent text-accent-foreground" : "bg-secondary text-secondary-foreground capitalize"}`}>
+                          {b.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

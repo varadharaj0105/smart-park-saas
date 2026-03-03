@@ -1,0 +1,252 @@
+# 🅿️ Smart Park SaaS — Full Project Report
+**Generated:** 2026-03-03 | **Status:** Running on localhost
+
+---
+
+## 🏗️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 18 + TypeScript + Vite |
+| **Styling** | TailwindCSS + shadcn/ui components |
+| **Charts** | Recharts |
+| **Maps** | Leaflet + react-leaflet |
+| **Routing** | React Router v6 |
+| **State/Data** | useState / useEffect (no global store) |
+| **Backend** | Node.js + Express |
+| **Database** | MySQL 8 (mysql2 driver) |
+| **Auth** | JWT (jsonwebtoken, 8h expiry) |
+| **Server Entry** | [server.js](file:///f:/parking/smart-park-saas/server.js) → port `5000` (via [.env](file:///f:/parking/smart-park-saas/.env)) |
+
+---
+
+## 🗄️ Database Schema
+
+```
+companies  ←──────────────────────────────────────┐
+  id, name, latitude, longitude, created_at        │
+                                                   │
+users  ──────────────────────────────── tenant_id ─┤
+  id, name, email, password,                       │
+  role ENUM('super_admin','company_admin',          │
+            'customer'),                           │
+  tenant_id, company_name, created_at              │
+                                                   │
+slots  ─────────────────────────────── tenant_id ──┤
+  id, tenant_id, slot_number, floor, type,         │
+  status ENUM('available','occupied',               │
+              'maintenance'),                      │
+  price_per_hour                                   │
+                                                   │
+bookings  ──────────────── tenant_id, slot_id ─────┤
+  id, tenant_id, user_id, slot_id,                 │
+  vehicle_number, start_time, duration,            │
+  end_time, status, total_amount, created_at       │
+                                                   │
+payments  ────────────── tenant_id, booking_id ────┘
+  id, tenant_id, booking_id, amount,
+  method, status ENUM('paid','pending','refunded'),
+  created_at
+```
+
+---
+
+## 🔑 Authentication & Role System
+
+### Flow
+```
+User logs in → Backend verifies password → JWT issued
+JWT contains: { user_id, role, tenant_id }
+Frontend maps backend role → local role:
+  "super_admin"   → "superadmin"
+  "company_admin" → "admin"
+  "customer"      → "user"
+Session stored in localStorage (token, role, tenant_id, user_id, name, email)
+```
+
+### Demo Credentials
+| Role | Email | Password |
+|------|-------|----------|
+| Super Admin | `super@demo.com` | `password` |
+| Company Admin | `admin@demo.com` | `password` |
+| Customer | `user@demo.com` | `password` |
+
+---
+
+## 👥 Role-Based Access
+
+### 🔴 Super Admin (`super_admin`)
+- Sees **all companies, all users, all payments** across every tenant
+- Can **create** new parking companies via map click
+- Can **edit** existing companies and their admins
+- Can **delete** companies (cascades: slots, bookings, payments, users)
+- Dashboard shows: total companies, total users, total completed bookings, total revenue
+
+### 🟡 Company Admin (`company_admin`)
+- Scoped to their **own tenant/company only**
+- Manages **parking slots** (create, update status, delete)
+- Views **all bookings** in their company
+- Views **payments** for their company
+- Dashboard shows: slot count, available slots, bookings, revenue
+
+### 🟢 Customer (`customer`)
+- Views **all company locations** on the map
+- **Books parking slots** at any company
+- Views **their own bookings** and history
+- **Pays and exits** — triggers payment creation
+- Views **their own payments**
+- Can update their **profile**
+
+---
+
+## 🌐 API Endpoints
+
+### Auth (`/api/auth`)
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/auth/signup` | Register new user (customer/company_admin/super_admin) |
+| POST | `/auth/login` | Login — returns JWT |
+
+### User (`/api/user`) — requires auth, all roles
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/user/locations` | All company locations with slot availability |
+| GET | `/user/slots` | Slots (filtered by tenant for admins, all for customers) |
+| GET | `/user/bookings` | Bookings (own for customers, tenant for admins) |
+| POST | `/user/bookings` | Create a new booking |
+| DELETE | `/user/bookings/:id` | Cancel a booking |
+| POST | `/user/bookings/:id/exit` | Complete booking + calculate & record payment |
+| GET | `/user/payments` | Payments (own for customers, tenant for admins) |
+| GET | `/user/dashboard/stats` | Personal stats: total bookings, active, total spent |
+
+### Admin (`/api/admin`) — requires `company_admin` or `super_admin`
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/admin/slots` | All slots for current tenant |
+| POST | `/admin/slots` | Create a new slot |
+| PUT | `/admin/slots/:id` | Update slot status / number |
+| DELETE | `/admin/slots/:id` | Delete a slot |
+| GET | `/admin/dashboard/stats` | Tenant stats: slots, bookings, revenue |
+
+### Super Admin (`/api/super`) — requires `super_admin`
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/super/companies` | All companies (with admin info joined) |
+| GET | `/super/companies/:id` | Company details + stats + recent payments |
+| POST | `/super/companies` | Create company + assign admin (transaction) |
+| PUT | `/super/companies/:id` | Update company + admin details |
+| DELETE | `/super/companies/:id` | Delete company + all data (cascade transaction) |
+| GET | `/super/users` | All users across all tenants |
+| GET | `/super/payments` | All payments globally |
+
+---
+
+## 📄 Frontend Pages (16 pages)
+
+| Page | Route | Role | Description |
+|------|-------|------|-------------|
+| `Landing` | `/` | Public | Marketing landing page |
+| [Login](file:///f:/parking/smart-park-saas/src/pages/Login.tsx#12-139) | `/login` | Public | JWT login + demo buttons |
+| [Signup](file:///f:/parking/smart-park-saas/src/lib/api.ts#58-70) | `/signup` | Public | Register new customer |
+| [DashboardSuperAdmin](file:///f:/parking/smart-park-saas/src/pages/DashboardSuperAdmin.tsx#76-450) | `/dashboard/superadmin` | superadmin | Stats, map, companies table, users table |
+| [DashboardAdmin](file:///f:/parking/smart-park-saas/src/pages/DashboardAdmin.tsx#14-175) | `/dashboard/admin` | admin | Stats, revenue chart, slot usage pie, bookings |
+| [DashboardUser](file:///f:/parking/smart-park-saas/src/pages/DashboardUser.tsx#14-233) | `/dashboard/user` | user | Stats, booking history, company selector |
+| [Companies](file:///f:/parking/smart-park-saas/src/pages/Companies.tsx#18-110) | `/companies` | superadmin | Card list of all companies |
+| [CompanyDetails](file:///f:/parking/smart-park-saas/src/lib/api.ts#168-171) | `/companies/:id` | superadmin | Per-company stats, payments |
+| [Users](file:///f:/parking/smart-park-saas/src/pages/Users.tsx#15-116) | `/users` | superadmin | All customers across system |
+| `Slots` | `/slots` | admin | Slot CRUD management table |
+| `Booking` | `/booking` | user | Book a slot (with company/slot selector) |
+| `BookingHistory` | `/booking-history` | user/admin | Full booking list with cancel/exit |
+| `Payments` | `/payments` | all | Payments table + Pay Booking modal |
+| `ParkingMap` | `/map` | user/admin | Interactive Leaflet map of parking locations |
+| `Profile` | `/profile` | user | View/edit user profile |
+| `NotFound` | `*` | Public | 404 fallback |
+
+---
+
+## 🧩 Frontend Components (8 shared)
+
+| Component | Purpose |
+|-----------|---------|
+| `DashboardLayout` | Sidebar + topbar + nav — renders different nav items per role |
+| `StatCard` | Reusable metric card with icon, value, trend |
+| `PeakHourCard` | Predicted busy hours visual (admin dashboard) |
+| `NotificationProvider` | Global toast notification system |
+| `ThemeProvider` | Dark/light mode toggle (persisted in localStorage) |
+| `LogoutModal` | Confirmation dialog before logout |
+| `LoadingSpinner` | Reusable spinner |
+| `NavLink` | Active-aware sidebar link |
+
+---
+
+## 🔧 Key Features Implemented
+
+### ✅ Multi-Tenant Architecture
+- Every table has `tenant_id` scoping data per company
+- Admins only see their own company's data
+- Super admin sees everything
+
+### ✅ Live Parking Map
+- Leaflet map showing all company locations as markers
+- Super admin can **click the map** to open the "Create Company" modal (lat/lng auto-filled)
+- User map shows available slots per location
+
+### ✅ Booking + Exit Flow
+- Customer selects company → selects available slot → enters vehicle number → creates booking
+- On exit: duration calculated, amount = `ceil(hours) × price_per_hour`, payment recorded, slot freed
+
+### ✅ Payment Gateway Simulation
+- Multi-stage UI: "Connecting → Processing → Approved" with spinner/checkmark animations
+- Supports Card, UPI, Cash methods
+
+### ✅ Dark / Light Mode
+- Full theme system using CSS variables
+- Persisted across sessions
+
+### ✅ Role-Aware Navigation
+- Sidebar dynamically shows different links based on logged-in role
+- No route guards on frontend (backend protects all sensitive endpoints with JWT)
+
+---
+
+## 🐛 Bugs Fixed (This Session)
+
+| # | Bug | Impact |
+|---|-----|--------|
+| 1 | `Users.tsx` filtered `role === 'user'` — DB uses `'customer'` | No users visible at all |
+| 2 | `Users.tsx` used `company_id` — API returns `tenant_id` | Company column always "None" |
+| 3 | `DashboardSuperAdmin` Save button was a toast stub | Companies couldn't be created/edited |
+| 4 | `DashboardSuperAdmin` Delete button was a toast stub | Companies couldn't be deleted |
+| 5 | Revenue chart used `Math.random()` | Chart showed garbage data on every render |
+| 6 | Stats showed hardcoded `1420 / $32,800` | Stats were always wrong |
+| 7 | `loadData` only fetched companies + users | Missing payments for stats |
+| 8 | `console.error` on load failure | Silent failures, no user feedback |
+| 9 | `apiUpdateCompany` + `apiDeleteCompany` didn't exist in `api.ts` | TypeScript would fail to compile |
+| 10 | Unused imports (`LineChart`, `Line`, `MapPin`) | Dead code / minor lint noise |
+
+---
+
+## 🚀 How to Run
+
+```powershell
+# Start backend (port 5000)
+node server.js
+
+# Start frontend (port 8080)
+npm run dev
+```
+
+> Both are currently running. Frontend: http://localhost:8080 | Backend: http://localhost:5000
+
+---
+
+## ⚠️ Known Gaps (Future Work)
+
+| Gap | Notes |
+|-----|-------|
+| No frontend route guards | Unauthenticated users can access `/dashboard/*` routes by URL |
+| Passwords stored as plaintext | No bcrypt hashing — **not production-safe** |
+| Chart data (weekly revenue, monthly bookings) uses dummy numbers | No per-day aggregation endpoint exists yet |
+| No email verification | Users can sign up with any email |
+| No pagination | Tables load all records (fine for demo scale) |
+| Super admin `tenant_id` = 1 (hardcoded seed) | Required by FK constraint — works but is a design quirk |

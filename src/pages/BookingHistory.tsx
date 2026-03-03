@@ -4,8 +4,8 @@
 
 import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Search, Filter, CalendarCheck } from "lucide-react";
-import { apiGetBookings } from "@/lib/api";
+import { Search, Filter, CalendarCheck, CreditCard } from "lucide-react";
+import { apiExitBooking, apiGetBookings } from "@/lib/api";
 
 interface BookingRow {
   id: number;
@@ -15,14 +15,18 @@ interface BookingRow {
   duration: number;
   status: "active" | "completed" | "cancelled";
   total_amount: number | null;
+  company_name?: string;
 }
 
 export default function BookingHistory() {
   const [rows, setRows] = useState<BookingRow[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [payingId, setPayingId] = useState<number | null>(null);
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [paymentStage, setPaymentStage] = useState<"idle" | "calculating" | "processing" | "success">("idle");
 
-  useEffect(() => {
+  const loadBookings = () => {
     apiGetBookings()
       .then((result) => {
         setRows(result.data || result);
@@ -30,6 +34,10 @@ export default function BookingHistory() {
       .catch(() => {
         setRows([]);
       });
+  };
+
+  useEffect(() => {
+    loadBookings();
   }, []);
 
   const filtered = rows.filter((b) => {
@@ -110,18 +118,32 @@ export default function BookingHistory() {
                       <td className="px-6 py-3 font-medium text-foreground">{b.id}</td>
                       <td className="px-6 py-3 text-foreground">{b.vehicle_number}</td>
                       <td className="px-6 py-3 text-foreground">{b.slot_id}</td>
-                      <td className="px-6 py-3 text-foreground">—</td>
+                      <td className="px-6 py-3 text-foreground">{b.company_name || "—"}</td>
                       <td className="px-6 py-3 text-muted-foreground">
                         {new Date(b.start_time).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-3 text-muted-foreground">{b.duration}h</td>
                       <td className="px-6 py-3 font-semibold text-foreground">
-                        {b.total_amount != null ? `$${b.total_amount.toFixed(2)}` : "-"}
+                        {b.total_amount != null ? `$${Number(b.total_amount).toFixed(2)}` : "-"}
                       </td>
                       <td className="px-6 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[b.status] || "bg-secondary text-secondary-foreground"}`}>
-                          {b.status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[b.status] || "bg-secondary text-secondary-foreground"}`}>
+                            {b.status}
+                          </span>
+                          {b.status === "active" && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPayingId(b.id);
+                                setShowPayModal(true);
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border text-xs text-foreground hover:bg-secondary"
+                            >
+                              <CreditCard className="h-3 w-3" /> Exit &amp; Pay
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -130,6 +152,77 @@ export default function BookingHistory() {
             </table>
           </div>
         </div>
+
+        {/* Exit & Pay modal with simple animation */}
+        {showPayModal && payingId !== null && (
+          <div className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-xl animate-scale-in">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-foreground text-lg">Exit &amp; Pay</h3>
+                <button
+                  onClick={() => {
+                    if (paymentStage !== "idle") return;
+                    setShowPayModal(false);
+                    setPayingId(null);
+                  }}
+                  className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  disabled={paymentStage !== "idle"}
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                We&apos;ll calculate your stay, record payment, and free the slot.
+              </p>
+
+              <div className="flex items-center gap-3 min-h-[40px] mb-4 bg-muted/30 p-3 rounded-lg">
+                {paymentStage !== "idle" && paymentStage !== "success" && (
+                  <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                )}
+                {paymentStage === "success" && (
+                  <div className="h-6 w-6 rounded-full bg-green-500 text-white flex items-center justify-center animate-scale-in">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </div>
+                )}
+                <span className="text-sm font-medium text-foreground">
+                  {paymentStage === "idle" && "Ready to complete payment."}
+                  {paymentStage === "calculating" && "Calculating final duration & fee..."}
+                  {paymentStage === "processing" && "Processing payment gateway..."}
+                  {paymentStage === "success" && "Payment Approved! Releasing slot..."}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                disabled={paymentStage !== "idle"}
+                onClick={async () => {
+                  try {
+                    setPaymentStage("calculating");
+                    await new Promise(r => setTimeout(r, 800));
+
+                    setPaymentStage("processing");
+                    await new Promise(r => setTimeout(r, 1200));
+
+                    setPaymentStage("success");
+                    await new Promise(r => setTimeout(r, 800));
+
+                    await apiExitBooking(String(payingId));
+                    loadBookings();
+                    setShowPayModal(false);
+                    setPayingId(null);
+                    setPaymentStage("idle");
+                  } catch {
+                    setPaymentStage("idle");
+                    // handled by api layer / notifications
+                  }
+                }}
+                className="w-full h-10 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {paymentStage !== "idle" ? "Processing..." : "Complete Exit & Payment"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

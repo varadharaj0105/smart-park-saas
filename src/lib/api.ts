@@ -3,7 +3,7 @@
 // Change API_BASE to your backend URL
 // ============================================
 
-const API_BASE = "http://localhost:3000/api";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 /**
  * Generic fetch wrapper with auth token
@@ -73,7 +73,11 @@ export async function apiSignup(data: {
 // ============================================
 
 export async function apiGetSlots() {
-  return apiFetch("/admin/slots");
+  return apiFetch("/user/slots");
+}
+
+export async function apiGetLocations() {
+  return apiFetch("/user/locations");
 }
 
 export async function apiCreateSlot(data: {
@@ -98,7 +102,7 @@ export async function apiUpdateSlot(
 }
 
 export async function apiDeleteSlot(slotId: string) {
-  return apiFetch(`/slots/${slotId}`, {
+  return apiFetch(`/admin/slots/${slotId}`, {
     method: "DELETE",
   });
 }
@@ -129,6 +133,10 @@ export async function apiCancelBooking(bookingId: string) {
   });
 }
 
+export async function apiGetUserDashboardStats() {
+  return apiFetch("/user/dashboard/stats");
+}
+
 // Complete a booking and create payment (exit flow)
 export async function apiExitBooking(bookingId: string, method: string = "card") {
   return apiFetch(`/user/bookings/${bookingId}/exit`, {
@@ -155,6 +163,51 @@ export async function apiGetDashboardStats() {
 
 export async function apiGetCompanies() {
   return apiFetch("/super/companies");
+}
+
+export async function apiGetCompanyDetails(id: string) {
+  return apiFetch(`/super/companies/${id}`);
+}
+
+export async function apiCreateCompany(data: {
+  company_name: string;
+  latitude: number;
+  longitude: number;
+  admin_name: string;
+  admin_email: string;
+  admin_password: string;
+}) {
+  return apiFetch("/super/companies", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiUpdateCompany(
+  id: number,
+  data: {
+    company_name?: string;
+    latitude?: number;
+    longitude?: number;
+    admin_name?: string;
+    admin_email?: string;
+    admin_password?: string;
+  }
+) {
+  return apiFetch(`/super/companies/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiDeleteCompany(id: number) {
+  return apiFetch(`/super/companies/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function apiGetSuperPayments() {
+  return apiFetch("/super/payments");
 }
 
 export async function apiGetUsers() {

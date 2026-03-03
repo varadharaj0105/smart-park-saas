@@ -2,44 +2,87 @@
 // User Dashboard — with Charts
 // ============================================
 
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import StatCard from "@/components/StatCard";
-import PeakHourCard from "@/components/PeakHourCard";
-import { CalendarCheck, CreditCard, ParkingSquare, Building2, ArrowRight, Map } from "lucide-react";
+import { useNotification } from "@/components/NotificationProvider";
+import { CalendarCheck, CreditCard, ParkingSquare, Building2, ArrowRight, Map, Search, ChevronDown } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-
-const demoCompanies = [
-  { id: "1", name: "Downtown Parking Co." },
-  { id: "2", name: "Airport Parking Ltd." },
-  { id: "3", name: "Mall Parking Services" },
-];
-
-const bookingStats = [
-  { name: "Jan", bookings: 3 }, { name: "Feb", bookings: 5 },
-  { name: "Mar", bookings: 2 }, { name: "Apr", bookings: 7 },
-  { name: "May", bookings: 4 }, { name: "Jun", bookings: 6 },
-];
-
-const myBookings = [
-  { id: "B010", company: "Downtown Parking Co.", slot: "A-05", date: "2026-02-24", status: "Active" },
-  { id: "B008", company: "Airport Parking Ltd.", slot: "C-12", date: "2026-02-22", status: "Completed" },
-  { id: "B006", company: "Downtown Parking Co.", slot: "B-03", date: "2026-02-20", status: "Completed" },
-];
+import { apiGetLocations, apiGetUserDashboardStats, apiGetBookings } from "@/lib/api";
 
 export default function DashboardUser() {
-  const [selectedCompany, setSelectedCompany] = useState("");
+  const [selectedCompany, setSelectedCompany] = useState<any>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const { showNotification } = useNotification();
+
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [stats, setStats] = useState({ totalBookings: 0, activeBookings: 0, totalSpent: 0 });
+  const [myBookings, setMyBookings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      apiGetLocations().catch(() => ({ data: [] })),
+      apiGetUserDashboardStats().catch(() => ({ data: { totalBookings: 0, activeBookings: 0, totalSpent: 0 } })),
+      apiGetBookings().catch(() => ({ data: [] }))
+    ]).then(([locationsRes, statsRes, bookingsRes]) => {
+      setCompanies(locationsRes.data || locationsRes);
+
+      const st = statsRes.data || statsRes;
+      setStats({
+        totalBookings: st.totalBookings || 0,
+        activeBookings: st.activeBookings || 0,
+        totalSpent: st.totalSpent || 0
+      });
+
+      const ALL_BOOKINGS = bookingsRes.data || bookingsRes;
+      if (Array.isArray(ALL_BOOKINGS)) {
+        setMyBookings(ALL_BOOKINGS.slice(0, 3));
+      }
+      setLoading(false);
+    });
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredCompanies = companies.filter(c =>
+    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleBookSelected = () => {
+    if (!selectedCompany) {
+      showNotification("Please select a company first", "warning");
+      return;
+    }
+    navigate(`/booking?companyId=${selectedCompany.id}&companyName=${encodeURIComponent(selectedCompany.name)}`);
+  };
+
+  // Dummy booking stats for graph for now
+  const bookingGraph = [
+    { name: "Jan", bookings: 3 }, { name: "Feb", bookings: 5 },
+    { name: "Mar", bookings: 2 }, { name: "Apr", bookings: 7 },
+    { name: "May", bookings: 4 }, { name: "Jun", bookings: 6 },
+  ];
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 animate-fade-in">
         {/* Stats */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard title="My Bookings" value={3} icon={CalendarCheck} />
-          <StatCard title="Active" value={1} icon={ParkingSquare} />
-          <StatCard title="Total Spent" value="$85" icon={CreditCard} />
-          <StatCard title="Companies" value={demoCompanies.length} icon={Building2} />
+          <StatCard title="Total Bookings" value={stats.totalBookings} icon={CalendarCheck} />
+          <StatCard title="Active" value={stats.activeBookings} icon={ParkingSquare} />
+          <StatCard title="Total Spent" value={`$${Number(stats.totalSpent).toFixed(2)}`} icon={CreditCard} />
+          <StatCard title="Available Locations" value={companies.length} icon={Building2} />
         </div>
 
         {/* Charts + Peak Hours */}
@@ -47,7 +90,7 @@ export default function DashboardUser() {
           <div className="bg-card border border-border rounded-lg p-6">
             <h4 className="font-semibold text-foreground mb-4">My Booking History</h4>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={bookingStats}>
+              <BarChart data={bookingGraph}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
                 <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
@@ -56,29 +99,66 @@ export default function DashboardUser() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <PeakHourCard />
         </div>
 
-        {/* Select company */}
-        <div className="bg-card border border-border rounded-lg p-6">
+        {/* Select company Searchable Dropdown */}
+        <div className="bg-card border border-border rounded-lg p-6 overflow-visible">
           <h3 className="font-semibold text-foreground mb-4">Select Company to Book</h3>
           <div className="flex flex-col sm:flex-row gap-3">
-            <select
-              value={selectedCompany}
-              onChange={(e) => setSelectedCompany(e.target.value)}
-              className="flex-1 h-10 px-3 rounded-lg border border-input bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">Choose a company...</option>
-              {demoCompanies.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <Link
-              to="/booking"
+
+            <div className="relative flex-1" ref={dropdownRef}>
+              <div
+                className="w-full h-10 px-3 rounded-lg border border-input bg-background flex items-center justify-between cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+              >
+                <span className={`text-sm ${selectedCompany ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                  {selectedCompany ? selectedCompany.name : "Search and choose a company..."}
+                </span>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
+              </div>
+
+              {dropdownOpen && (
+                <div className="absolute top-12 left-0 w-full bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden animate-scale-in">
+                  <div className="p-2 border-b border-border flex items-center gap-2">
+                    <Search className="h-4 w-4 text-muted-foreground ml-1" />
+                    <input
+                      type="text"
+                      className="w-full bg-transparent text-sm text-foreground focus:outline-none placeholder:text-muted-foreground p-1"
+                      placeholder="Type to search..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-48 overflow-y-auto p-1">
+                    {filteredCompanies.length === 0 ? (
+                      <div className="p-3 text-sm text-muted-foreground text-center">No companies found</div>
+                    ) : (
+                      filteredCompanies.map(c => (
+                        <div
+                          key={c.id}
+                          className="px-3 py-2 text-sm text-foreground hover:bg-accent hover:text-accent-foreground rounded-md cursor-pointer transition-colors"
+                          onClick={() => {
+                            setSelectedCompany(c);
+                            setDropdownOpen(false);
+                            setSearchQuery("");
+                          }}
+                        >
+                          {c.name}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={handleBookSelected}
               className="inline-flex items-center justify-center gap-2 px-5 h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
             >
               View Slots <ArrowRight className="h-4 w-4" />
-            </Link>
+            </button>
           </div>
         </div>
 
@@ -118,19 +198,30 @@ export default function DashboardUser() {
                 </tr>
               </thead>
               <tbody>
-                {myBookings.map((b) => (
-                  <tr key={b.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
-                    <td className="px-6 py-3 font-medium text-foreground">{b.id}</td>
-                    <td className="px-6 py-3 text-foreground">{b.company}</td>
-                    <td className="px-6 py-3 text-foreground">{b.slot}</td>
-                    <td className="px-6 py-3 text-muted-foreground">{b.date}</td>
-                    <td className="px-6 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${b.status === "Active" ? "bg-accent text-accent-foreground" : "bg-secondary text-secondary-foreground"}`}>
-                        {b.status}
-                      </span>
+                {myBookings.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground text-sm">
+                      <CalendarCheck className="h-6 w-6 mx-auto mb-2 opacity-30" />
+                      No recent bookings found.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  myBookings.map((b) => (
+                    <tr key={b.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
+                      <td className="px-6 py-3 font-medium text-foreground">{b.id}</td>
+                      <td className="px-6 py-3 text-foreground">{b.company_name || "—"}</td>
+                      <td className="px-6 py-3 text-foreground">{b.slot_id}</td>
+                      <td className="px-6 py-3 text-muted-foreground">
+                        {new Date(b.start_time).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-3">
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${b.status === "active" ? "bg-accent text-accent-foreground" : "bg-secondary text-secondary-foreground"}`}>
+                          {b.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

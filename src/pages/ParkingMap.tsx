@@ -10,15 +10,27 @@ import { MapPin, Car, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import "leaflet/dist/leaflet.css";
 
-// Parking zones with coordinates
-const parkingZones = [
-  { id: "Z1", name: "Zone A — Ground Floor", lat: 28.6139, lng: 77.209, slots: 40, available: 12, type: "Car" },
-  { id: "Z2", name: "Zone B — Floor 1", lat: 28.6145, lng: 77.2105, slots: 30, available: 8, type: "Bike" },
-  { id: "Z3", name: "Zone C — Floor 2", lat: 28.6132, lng: 77.2075, slots: 50, available: 23, type: "Car" },
-  { id: "Z4", name: "Zone D — Basement", lat: 28.615, lng: 77.208, slots: 20, available: 5, type: "SUV" },
-];
+import { apiGetLocations, apiCreateCompany } from "@/lib/api";
+import { getAuth } from "@/lib/auth";
 
-function MapComponent({ onSelectZone }: { onSelectZone: (zone: typeof parkingZones[0]) => void }) {
+export interface ParkingLocation {
+  id: number;
+  name: string;
+  latitude: number;
+  longitude: number;
+  total_slots: number;
+  available_slots: number;
+}
+
+function MapComponent({
+  locations,
+  onSelectLocation,
+  onMapClick
+}: {
+  locations: ParkingLocation[];
+  onSelectLocation: (loc: ParkingLocation) => void;
+  onMapClick?: (lat: number, lng: number) => void;
+}) {
   const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
@@ -47,16 +59,27 @@ function MapComponent({ onSelectZone }: { onSelectZone: (zone: typeof parkingZon
         iconAnchor: [16, 16],
       });
 
-      parkingZones.forEach((zone) => {
-        const marker = L.marker([zone.lat, zone.lng], { icon }).addTo(map);
+      // Update map bounds if there are locations
+      if (locations.length > 0) {
+        const bounds = L.latLngBounds(locations.map(l => [l.latitude, l.longitude] as [number, number]));
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+      }
+
+      locations.forEach((loc) => {
+        const marker = L.marker([loc.latitude, loc.longitude], { icon }).addTo(map);
         marker.bindPopup(
           `<div style="font-family:Inter,sans-serif;min-width:150px;">
-            <strong>${zone.name}</strong><br/>
-            <span style="color:#666;">Total: ${zone.slots} | Available: ${zone.available}</span><br/>
-            <span style="color:#666;">Type: ${zone.type}</span>
+            <strong>${loc.name}</strong><br/>
+            <span style="color:#666;">Total: ${loc.total_slots} | Available: ${loc.available_slots}</span><br/>
           </div>`
         );
-        marker.on("click", () => onSelectZone(zone));
+        marker.on("click", () => onSelectLocation(loc));
+      });
+
+      map.on("click", (e: any) => {
+        if (onMapClick) {
+          onMapClick(e.latlng.lat, e.latlng.lng);
+        }
       });
 
       setMapReady(true);
@@ -65,7 +88,7 @@ function MapComponent({ onSelectZone }: { onSelectZone: (zone: typeof parkingZon
         map.remove();
       };
     });
-  }, []);
+  }, [locations]);
 
   return (
     <div
@@ -77,66 +100,223 @@ function MapComponent({ onSelectZone }: { onSelectZone: (zone: typeof parkingZon
 }
 
 export default function ParkingMap() {
-  const [selectedZone, setSelectedZone] = useState<typeof parkingZones[0] | null>(null);
+  const [locations, setLocations] = useState<ParkingLocation[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<ParkingLocation | null>(null);
+  const [loading, setLoading] = useState(true);
   const { showNotification } = useNotification();
+  const user = getAuth();
 
-  const handleSelectZone = (zone: typeof parkingZones[0]) => {
-    setSelectedZone(zone);
-    showNotification(`Selected ${zone.name}`, "info");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newLocation, setNewLocation] = useState<{ lat: number, lng: number } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    company_name: '', admin_name: '', admin_email: '', admin_password: ''
+  });
+
+  const fetchLocations = async () => {
+    try {
+      const res = await apiGetLocations();
+      setLocations(res.data || []);
+    } catch (error: any) {
+      showNotification(error.message || "Failed to fetch locations", "error");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    fetchLocations();
+  }, []);
+
+  const handleSelectLocation = (loc: ParkingLocation) => {
+    setSelectedLocation(loc);
+  };
+
+  const handleMapClick = (lat: number, lng: number) => {
+    if (user?.role === 'superadmin') {
+      setNewLocation({ lat, lng });
+      setShowCreateModal(true);
+      setFormData({ company_name: '', admin_name: '', admin_email: '', admin_password: '' });
+    }
+  };
+
+  const handleCreateCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLocation) return;
+
+    setIsSubmitting(true);
+    try {
+      await apiCreateCompany({
+        ...formData,
+        latitude: newLocation.lat,
+        longitude: newLocation.lng
+      });
+      showNotification("Company created successfully!", "success");
+      setShowCreateModal(false);
+      fetchLocations();
+    } catch (error: any) {
+      showNotification(error.message || "Failed to create company", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Loading parking map...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
         <div>
           <h3 className="text-xl font-bold text-foreground">Parking Map</h3>
-          <p className="text-sm text-muted-foreground">Click on a zone to view available slots</p>
+          <p className="text-sm text-muted-foreground">
+            {user?.role === 'superadmin'
+              ? "Click anywhere on the map to create a new company location"
+              : "Select a company location to view available slots"}
+          </p>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Map */}
-          <div className="lg:col-span-2">
-            <MapComponent onSelectZone={handleSelectZone} />
+          <div className="lg:col-span-2 relative">
+            <MapComponent
+              locations={locations}
+              onSelectLocation={handleSelectLocation}
+              onMapClick={handleMapClick}
+            />
           </div>
 
-          {/* Zone details */}
+          {/* Location details */}
           <div className="space-y-4">
-            <h4 className="font-semibold text-foreground">Parking Zones</h4>
-            {parkingZones.map((zone) => (
-              <button
-                key={zone.id}
-                onClick={() => handleSelectZone(zone)}
-                className={`w-full text-left p-4 rounded-lg border transition-all hover:shadow-sm ${
-                  selectedZone?.id === zone.id
-                    ? "border-primary bg-accent ring-2 ring-ring"
-                    : "border-border hover:border-primary/50"
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  <span className="font-medium text-foreground text-sm">{zone.name}</span>
-                </div>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-xs text-muted-foreground">{zone.type} · {zone.slots} slots</span>
-                  <span className={`text-xs font-medium ${zone.available > 10 ? "text-success" : zone.available > 0 ? "text-warning" : "text-destructive"}`}>
-                    {zone.available} available
-                  </span>
-                </div>
-              </button>
-            ))}
+            <h4 className="font-semibold text-foreground">Parking Locations</h4>
+            {locations.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No locations available.</p>
+            ) : (
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                {locations.map((loc) => (
+                  <button
+                    key={loc.id}
+                    onClick={() => handleSelectLocation(loc)}
+                    className={`w-full text-left p-4 rounded-lg border transition-all hover:shadow-sm ${selectedLocation?.id === loc.id
+                      ? "border-primary bg-accent ring-2 ring-ring"
+                      : "border-border hover:border-primary/50"
+                      }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      <span className="font-medium text-foreground text-sm">{loc.name}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-xs text-muted-foreground">{loc.total_slots} total slots</span>
+                      <span className={`text-xs font-medium ${loc.available_slots > 10 ? "text-success" : loc.available_slots > 0 ? "text-warning" : "text-destructive"}`}>
+                        {loc.available_slots} available
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
-            {selectedZone && (
+            {selectedLocation && (
               <Link
-                to="/booking"
-                className="w-full h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center justify-center gap-2"
+                to={`/booking?companyId=${selectedLocation.id}&companyName=${encodeURIComponent(selectedLocation.name)}`}
+                className="w-full h-10 mt-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center justify-center gap-2"
               >
-                <Car className="h-4 w-4" /> Book in {selectedZone.name.split("—")[0]}
+                <Car className="h-4 w-4" /> Book in {selectedLocation.name}
                 <ArrowRight className="h-4 w-4" />
               </Link>
             )}
           </div>
         </div>
       </div>
+
+      {/* Super Admin Create Company Modal */}
+      {showCreateModal && user?.role === 'superadmin' && (
+        <div className="fixed inset-0 bg-foreground/20 z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-xl animate-scale-in">
+            <h3 className="text-xl font-bold text-foreground mb-4">Create New Company</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Setting up at coordinates {newLocation?.lat.toFixed(4)}, {newLocation?.lng.toFixed(4)}
+            </p>
+
+            <form onSubmit={handleCreateCompany} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Company Name</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  value={formData.company_name}
+                  onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+                  placeholder="e.g. Acme Parking"
+                />
+              </div>
+              <div className="border-t border-border pt-4">
+                <h4 className="text-sm font-semibold mb-3">Admin Account Details</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">Admin Name</label>
+                    <input
+                      type="text"
+                      required
+                      className="w-full h-9 px-3 rounded-md border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      value={formData.admin_name}
+                      onChange={(e) => setFormData({ ...formData, admin_name: e.target.value })}
+                      placeholder="John Doe"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">Admin Email</label>
+                    <input
+                      type="email"
+                      required
+                      className="w-full h-9 px-3 rounded-md border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      value={formData.admin_email}
+                      onChange={(e) => setFormData({ ...formData, admin_email: e.target.value })}
+                      placeholder="admin@company.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">Admin Password</label>
+                    <input
+                      type="password"
+                      required
+                      className="w-full h-9 px-3 rounded-md border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      value={formData.admin_password}
+                      onChange={(e) => setFormData({ ...formData, admin_password: e.target.value })}
+                      placeholder="••••••••"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 rounded-lg border border-border text-foreground text-sm font-medium hover:bg-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
+                >
+                  {isSubmitting ? "Creating..." : "Create Company & Admin"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

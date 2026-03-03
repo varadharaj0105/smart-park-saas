@@ -17,6 +17,9 @@ import Payments from "./pages/Payments";
 import Profile from "./pages/Profile";
 import BookingHistory from "./pages/BookingHistory";
 import ParkingMap from "./pages/ParkingMap";
+import Companies from "./pages/Companies";
+import CompanyDetails from "./pages/CompanyDetails";
+import Users from "./pages/Users";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +45,9 @@ const App = () => (
               <Route path="/profile" element={<Profile />} />
               <Route path="/booking-history" element={<BookingHistory />} />
               <Route path="/map" element={<ParkingMap />} />
+              <Route path="/companies" element={<Companies />} />
+              <Route path="/companies/:id" element={<CompanyDetails />} />
+              <Route path="/users" element={<Users />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

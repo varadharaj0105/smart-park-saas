@@ -35,14 +35,14 @@ interface NavItem {
 const navByRole: Record<UserRole, NavItem[]> = {
   superadmin: [
     { label: "Dashboard", path: "/dashboard/superadmin", icon: <LayoutDashboard className="h-5 w-5" /> },
-    { label: "Companies", path: "/dashboard/superadmin", icon: <Building2 className="h-5 w-5" /> },
-    { label: "Users", path: "/dashboard/superadmin", icon: <Users className="h-5 w-5" /> },
+    { label: "Companies", path: "/companies", icon: <Building2 className="h-5 w-5" /> },
+    { label: "Users", path: "/users", icon: <Users className="h-5 w-5" /> },
     { label: "Payments", path: "/payments", icon: <CreditCard className="h-5 w-5" /> },
   ],
   admin: [
     { label: "Dashboard", path: "/dashboard/admin", icon: <LayoutDashboard className="h-5 w-5" /> },
     { label: "Manage Slots", path: "/slots", icon: <ParkingSquare className="h-5 w-5" /> },
-    { label: "Bookings", path: "/booking", icon: <CalendarCheck className="h-5 w-5" /> },
+    { label: "Bookings", path: "/booking-history", icon: <CalendarCheck className="h-5 w-5" /> },
     { label: "Parking Map", path: "/map", icon: <Map className="h-5 w-5" /> },
     { label: "Payments", path: "/payments", icon: <CreditCard className="h-5 w-5" /> },
   ],
@@ -83,9 +83,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border flex flex-col transition-transform duration-300 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border flex flex-col transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          }`}
       >
         {/* Logo */}
         <div className="h-16 flex items-center gap-3 px-6 border-b border-sidebar-border">
@@ -113,11 +112,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 key={item.label}
                 to={item.path}
                 onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                }`}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${active
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  }`}
               >
                 {item.icon}
                 {item.label}
