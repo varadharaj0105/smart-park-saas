@@ -42,6 +42,39 @@ router.get("/fix2", async (req, res) => {
   }
 });
 
+router.get("/seed-admin", async (req, res) => {
+  try {
+    let compId = 1;
+    const compCheck = await pool.query("SELECT id FROM companies WHERE name = 'Downtown Parking Co.' LIMIT 1");
+    if (compCheck.rows.length === 0) {
+       const resComp = await pool.query("INSERT INTO companies (name, latitude, longitude) VALUES ('Downtown Parking Co.', 28.6315, 77.2167) RETURNING id");
+       compId = resComp.rows[0].id;
+    } else {
+       compId = compCheck.rows[0].id;
+    }
+
+    const hash = "$2b$10$QnYtoVCPoZ672BJi6COPxH9ae61gZuVMo0njbHh3XladtZ9Vx"; // 'password'
+
+    const adminCheck = await pool.query("SELECT id FROM users WHERE email = 'admin@demo.com'");
+    if (adminCheck.rows.length === 0) {
+      await pool.query("INSERT INTO users (name, email, password, role, tenant_id, company_name) VALUES ('Company Admin', 'admin@demo.com', $1, 'company_admin', $2, 'Downtown Parking Co.')", [hash, compId]);
+    } else {
+      await pool.query("UPDATE users SET password = $1 WHERE email = 'admin@demo.com'", [hash]);
+    }
+    
+    const superCheck = await pool.query("SELECT id FROM users WHERE email = 'super@demo.com'");
+    if (superCheck.rows.length === 0) {
+      await pool.query("INSERT INTO users (name, email, password, role, tenant_id, company_name) VALUES ('Super Admin', 'super@demo.com', $1, 'super_admin', $2, 'Platform')", [hash, compId]);
+    } else {
+      await pool.query("UPDATE users SET password = $1 WHERE email = 'super@demo.com'", [hash]);
+    }
+    
+    res.json({ message: "Admin accounts forcefully seeded and passwords reset to 'password'!" });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
 // Signup — always creates a customer account from the public form
 router.post("/signup", async (req, res) => {
   const { name, email, password, role = "customer", company_name } = req.body;
