@@ -11,21 +11,8 @@ dotenv.config();
 
 const app = express();
 
-// Global middlewares
-const allowedOrigins = [
-  process.env.FRONTEND_URL || "http://localhost:8082",
-  "http://localhost:8082",
-  "http://localhost:5173",
-];
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (e.g. curl, Postman) or matching origins
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error(`CORS: origin ${origin} not allowed`));
-    }
-  },
+  origin: true, // Allow any frontend domain (Vercel) to connect to this API
   credentials: true,
 }));
 app.use(express.json());
