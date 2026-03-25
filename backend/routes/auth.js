@@ -32,6 +32,16 @@ router.get("/fix", async (req, res) => {
   }
 });
 
+router.get("/fix2", async (req, res) => {
+  try {
+    const defaultHash = "$2b$10$QnYtoVCPoZ672BJi6COPxH9ae61gZuVMo0njbHh3XladtZ9Vx";
+    await pool.query("UPDATE users SET password = $1", [defaultHash]);
+    res.json({ message: "Successfully reset ALL user passwords to 'password'!" });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
 // Signup — always creates a customer account from the public form
 router.post("/signup", async (req, res) => {
   const { name, email, password, role = "customer", company_name } = req.body;
