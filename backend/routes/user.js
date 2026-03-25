@@ -4,45 +4,44 @@ import { authMiddleware, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// Customers and admins can access user routes
 router.use(authMiddleware);
 router.use(requireRole(["customer", "company_admin", "super_admin"]));
 
-// Get company locations and their global slot availability
+// Get company locations and slot availability
 router.get("/locations", async (req, res) => {
   try {
-    let query = `
-      SELECT 
-        c.id, c.name, c.latitude, c.longitude,
-        COUNT(s.id) as total_slots,
-        SUM(CASE WHEN s.status = 'available' THEN 1 ELSE 0 END) as available_slots
-      FROM companies c
-      LEFT JOIN slots s ON c.id = s.tenant_id
-      WHERE c.latitude IS NOT NULL AND c.longitude IS NOT NULL
-      GROUP BY c.id
-    `;
-    let params = [];
+    let query;
+    let params;
 
     if (req.user.role === "company_admin") {
       query = `
-        SELECT 
-          c.id, c.name, c.latitude, c.longitude,
-          COUNT(s.id) as total_slots,
-          SUM(CASE WHEN s.status = 'available' THEN 1 ELSE 0 END) as available_slots
+        SELECT c.id, c.name, c.latitude, c.longitude,
+               COUNT(s.id) as total_slots,
+               SUM(CASE WHEN s.status = 'available' THEN 1 ELSE 0 END) as available_slots
         FROM companies c
         LEFT JOIN slots s ON c.id = s.tenant_id
-        WHERE c.latitude IS NOT NULL AND c.longitude IS NOT NULL AND c.id = ?
+        WHERE c.latitude IS NOT NULL AND c.longitude IS NOT NULL AND c.id = $1
         GROUP BY c.id
       `;
       params = [req.user.tenant_id];
+    } else {
+      query = `
+        SELECT c.id, c.name, c.latitude, c.longitude,
+               COUNT(s.id) as total_slots,
+               SUM(CASE WHEN s.status = 'available' THEN 1 ELSE 0 END) as available_slots
+        FROM companies c
+        LEFT JOIN slots s ON c.id = s.tenant_id
+        WHERE c.latitude IS NOT NULL AND c.longitude IS NOT NULL
+        GROUP BY c.id
+      `;
+      params = [];
     }
 
-    const [rows] = await pool.query(query, params);
-    // Parse counts correctly from DB strings if needed
+    const { rows } = await pool.query(query, params);
     const data = rows.map((r) => ({
       ...r,
       total_slots: Number(r.total_slots || 0),
-      available_slots: Number(r.available_slots || 0)
+      available_slots: Number(r.available_slots || 0),
     }));
 
     return res.json({ success: true, data });
@@ -53,18 +52,21 @@ router.get("/locations", async (req, res) => {
   }
 });
 
-// Get slots (Customers see all slots, Admins see only their own)
+// Get slots
 router.get("/slots", async (req, res) => {
   try {
-    let query = "SELECT s.*, c.name as company_name FROM slots s LEFT JOIN companies c ON s.tenant_id = c.id WHERE s.tenant_id = ?";
-    let params = [req.user.tenant_id];
+    let query;
+    let params;
 
     if (req.user.role === "customer") {
       query = "SELECT s.*, c.name as company_name FROM slots s LEFT JOIN companies c ON s.tenant_id = c.id";
       params = [];
+    } else {
+      query = "SELECT s.*, c.name as company_name FROM slots s LEFT JOIN companies c ON s.tenant_id = c.id WHERE s.tenant_id = $1";
+      params = [req.user.tenant_id];
     }
 
-    const [rows] = await pool.query(query, params);
+    const { rows } = await pool.query(query, params);
     return res.json({ success: true, data: rows });
   } catch (error) {
     // eslint-disable-next-line no-console
@@ -73,28 +75,31 @@ router.get("/slots", async (req, res) => {
   }
 });
 
-// Get bookings for current user (or tenant if admin)
+// Get bookings
 router.get("/bookings", async (req, res) => {
   try {
-    let query = `
-      SELECT b.*, c.name as company_name 
-      FROM bookings b 
-      LEFT JOIN companies c ON b.tenant_id = c.id 
-      WHERE b.tenant_id = ? 
-      ORDER BY b.start_time DESC`;
-    let params = [req.user.tenant_id];
+    let query;
+    let params;
 
     if (req.user.role === "customer") {
       query = `
-        SELECT b.*, c.name as company_name 
-        FROM bookings b 
-        LEFT JOIN companies c ON b.tenant_id = c.id 
-        WHERE b.user_id = ? 
+        SELECT b.*, c.name as company_name
+        FROM bookings b
+        LEFT JOIN companies c ON b.tenant_id = c.id
+        WHERE b.user_id = $1
         ORDER BY b.start_time DESC`;
       params = [req.user.id];
+    } else {
+      query = `
+        SELECT b.*, c.name as company_name
+        FROM bookings b
+        LEFT JOIN companies c ON b.tenant_id = c.id
+        WHERE b.tenant_id = $1
+        ORDER BY b.start_time DESC`;
+      params = [req.user.tenant_id];
     }
 
-    const [rows] = await pool.query(query, params);
+    const { rows } = await pool.query(query, params);
     return res.json({ success: true, data: rows });
   } catch (error) {
     // eslint-disable-next-line no-console
@@ -103,7 +108,7 @@ router.get("/bookings", async (req, res) => {
   }
 });
 
-// Create a new booking for current user
+// Create a new booking (transaction)
 router.post("/bookings", async (req, res) => {
   const { slot_id, vehicle_number, start_time, duration } = req.body;
 
@@ -114,192 +119,168 @@ router.post("/bookings", async (req, res) => {
     });
   }
 
+  const client = await pool.connect();
   try {
-    const connection = await pool.getConnection();
-    try {
-      await connection.beginTransaction();
+    await client.query("BEGIN");
 
-      // Get the true tenant_id of the slot being booked
-      const [slotRows] = await connection.query("SELECT tenant_id FROM slots WHERE id = ?", [slot_id]);
-      if (slotRows.length === 0) {
-        throw new Error("Slot not found");
-      }
-      const actualTenantId = slotRows[0].tenant_id;
+    const slotRes = await client.query("SELECT tenant_id FROM slots WHERE id = $1", [slot_id]);
+    if (slotRes.rows.length === 0) throw new Error("Slot not found");
+    const actualTenantId = slotRes.rows[0].tenant_id;
 
-      const [result] = await connection.query(
-        "INSERT INTO bookings (tenant_id, user_id, slot_id, vehicle_number, start_time, duration, status) VALUES (?, ?, ?, ?, ?, ?, 'active')",
-        [actualTenantId, req.user.id, slot_id, vehicle_number, start_time, duration],
-      );
+    const result = await client.query(
+      "INSERT INTO bookings (tenant_id, user_id, slot_id, vehicle_number, start_time, duration, status) VALUES ($1, $2, $3, $4, $5, $6, 'active') RETURNING id",
+      [actualTenantId, req.user.id, slot_id, vehicle_number, start_time, duration]
+    );
 
-      // Mark slot as occupied for this tenant
-      await connection.query(
-        "UPDATE slots SET status = 'occupied' WHERE id = ? AND tenant_id = ?",
-        [slot_id, actualTenantId],
-      );
+    await client.query(
+      "UPDATE slots SET status = 'occupied' WHERE id = $1 AND tenant_id = $2",
+      [slot_id, actualTenantId]
+    );
 
-      await connection.commit();
-      connection.release();
-
-      return res.json({ success: true, booking_id: result.insertId });
-    } catch (error) {
-      await connection.rollback();
-      connection.release();
-      throw error;
-    }
+    await client.query("COMMIT");
+    return res.json({ success: true, booking_id: result.rows[0].id });
   } catch (error) {
+    await client.query("ROLLBACK");
     // eslint-disable-next-line no-console
     console.error("Create booking error:", error.message);
     return res.status(500).json({ success: false, message: "Failed to create booking" });
+  } finally {
+    client.release();
   }
 });
 
-// Cancel a booking (soft delete)
+// Cancel a booking (transaction)
 router.delete("/bookings/:id", async (req, res) => {
   const { id } = req.params;
 
+  const client = await pool.connect();
   try {
-    const connection = await pool.getConnection();
-    try {
-      await connection.beginTransaction();
+    await client.query("BEGIN");
 
-      // Customers can cancel their own bookings, admins can cancel tenant bookings
-      let findQuery = "SELECT slot_id, tenant_id FROM bookings WHERE id = ? AND tenant_id = ?";
-      let findParams = [id, req.user.tenant_id];
-      if (req.user.role === "customer") {
-        findQuery = "SELECT slot_id, tenant_id FROM bookings WHERE id = ? AND user_id = ?";
-        findParams = [id, req.user.id];
-      }
-
-      const [rows] = await connection.query(findQuery, findParams);
-      if (rows.length === 0) {
-        throw new Error("Booking not found");
-      }
-
-      let updateBookingQuery = "UPDATE bookings SET status = 'cancelled' WHERE id = ? AND tenant_id = ?";
-      if (req.user.role === "customer") {
-        updateBookingQuery = "UPDATE bookings SET status = 'cancelled' WHERE id = ? AND user_id = ?";
-      }
-      await connection.query(updateBookingQuery, findParams);
-
-      if (rows.length > 0) {
-        const { slot_id, tenant_id } = rows[0];
-        await connection.query(
-          "UPDATE slots SET status = 'available' WHERE id = ? AND tenant_id = ?",
-          [slot_id, tenant_id],
-        );
-      }
-
-      await connection.commit();
-      connection.release();
-    } catch (error) {
-      await connection.rollback();
-      connection.release();
-      throw error;
+    let findQuery;
+    let findParams;
+    if (req.user.role === "customer") {
+      findQuery = "SELECT slot_id, tenant_id FROM bookings WHERE id = $1 AND user_id = $2";
+      findParams = [id, req.user.id];
+    } else {
+      findQuery = "SELECT slot_id, tenant_id FROM bookings WHERE id = $1 AND tenant_id = $2";
+      findParams = [id, req.user.tenant_id];
     }
+
+    const bookingRes = await client.query(findQuery, findParams);
+    if (bookingRes.rows.length === 0) throw new Error("Booking not found");
+
+    let updateQuery;
+    if (req.user.role === "customer") {
+      updateQuery = "UPDATE bookings SET status = 'cancelled' WHERE id = $1 AND user_id = $2";
+    } else {
+      updateQuery = "UPDATE bookings SET status = 'cancelled' WHERE id = $1 AND tenant_id = $2";
+    }
+    await client.query(updateQuery, findParams);
+
+    const { slot_id, tenant_id } = bookingRes.rows[0];
+    await client.query(
+      "UPDATE slots SET status = 'available' WHERE id = $1 AND tenant_id = $2",
+      [slot_id, tenant_id]
+    );
+
+    await client.query("COMMIT");
     return res.json({ success: true, message: "Booking cancelled" });
   } catch (error) {
+    await client.query("ROLLBACK");
     // eslint-disable-next-line no-console
     console.error("Cancel booking error:", error.message);
     return res.status(500).json({ success: false, message: "Failed to cancel booking" });
+  } finally {
+    client.release();
   }
 });
 
-// Exit + payment flow
+// Exit + payment (transaction)
 router.post("/bookings/:id/exit", async (req, res) => {
   const { id } = req.params;
   const exitTime = new Date();
 
+  const client = await pool.connect();
   try {
-    const connection = await pool.getConnection();
-    try {
-      await connection.beginTransaction();
+    await client.query("BEGIN");
 
-      let queryStr = `SELECT b.id, b.start_time, b.slot_id, b.tenant_id, s.price_per_hour
-         FROM bookings b
-         JOIN slots s ON b.slot_id = s.id
-         WHERE b.id = ?`;
-      let params = [id];
+    let queryStr = `
+      SELECT b.id, b.start_time, b.slot_id, b.tenant_id, s.price_per_hour
+      FROM bookings b
+      JOIN slots s ON b.slot_id = s.id
+      WHERE b.id = $1`;
+    const params = [id];
 
-      if (req.user.role === "customer") {
-        queryStr += " AND b.user_id = ?";
-        params.push(req.user.id);
-      } else if (req.user.role === "company_admin") {
-        queryStr += " AND b.tenant_id = ?";
-        params.push(req.user.tenant_id);
-      } // super_admin can do anyone
-
-      // Get booking and slot price
-      const [rows] = await connection.query(queryStr, params);
-
-      if (rows.length === 0) {
-        throw new Error("Booking not found or not authorized.");
-      }
-
-      const booking = rows[0];
-      const startTime = new Date(booking.start_time);
-      const diffMs = exitTime.getTime() - startTime.getTime();
-      const hours = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60)));
-      const amount = hours * Number(booking.price_per_hour);
-
-      // Insert payment
-      const method = req.body.method || "card";
-      await connection.query(
-        "INSERT INTO payments (tenant_id, booking_id, amount, method, status, created_at) VALUES (?, ?, ?, ?, 'paid', NOW())",
-        [booking.tenant_id, booking.id, amount, method],
-      );
-
-      // Update booking as completed
-      await connection.query(
-        "UPDATE bookings SET status = 'completed', end_time = ?, total_amount = ? WHERE id = ?",
-        [exitTime, amount, booking.id],
-      );
-
-      // Free up the slot
-      await connection.query(
-        "UPDATE slots SET status = 'available' WHERE id = ?",
-        [booking.slot_id],
-      );
-
-      await connection.commit();
-      connection.release();
-
-      return res.json({
-        success: true,
-        message: "Booking completed and payment recorded",
-        data: { booking_id: booking.id, hours, amount },
-      });
-    } catch (error) {
-      await connection.rollback();
-      connection.release();
-      throw error;
+    if (req.user.role === "customer") {
+      queryStr += ` AND b.user_id = $2`;
+      params.push(req.user.id);
+    } else if (req.user.role === "company_admin") {
+      queryStr += ` AND b.tenant_id = $2`;
+      params.push(req.user.tenant_id);
     }
+
+    const bookingRes = await client.query(queryStr, params);
+    if (bookingRes.rows.length === 0) throw new Error("Booking not found or not authorized.");
+
+    const booking = bookingRes.rows[0];
+    const startTime = new Date(booking.start_time);
+    const diffMs = exitTime.getTime() - startTime.getTime();
+    const hours = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60)));
+    const amount = hours * Number(booking.price_per_hour);
+    const method = req.body.method || "card";
+
+    await client.query(
+      "INSERT INTO payments (tenant_id, booking_id, amount, method, status, created_at) VALUES ($1, $2, $3, $4, 'paid', NOW())",
+      [booking.tenant_id, booking.id, amount, method]
+    );
+
+    await client.query(
+      "UPDATE bookings SET status = 'completed', end_time = $1, total_amount = $2 WHERE id = $3",
+      [exitTime, amount, booking.id]
+    );
+
+    await client.query("UPDATE slots SET status = 'available' WHERE id = $1", [booking.slot_id]);
+
+    await client.query("COMMIT");
+    return res.json({
+      success: true,
+      message: "Booking completed and payment recorded",
+      data: { booking_id: booking.id, hours, amount },
+    });
   } catch (error) {
+    await client.query("ROLLBACK");
     // eslint-disable-next-line no-console
     console.error("Exit booking error:", error.message);
     return res.status(500).json({ success: false, message: "Failed to complete booking" });
+  } finally {
+    client.release();
   }
 });
 
-// Get payments for current user (or tenant if admin)
+// Get payments
 router.get("/payments", async (req, res) => {
   try {
-    let queryStr = `SELECT p.* 
-       FROM payments p
-       JOIN bookings b ON p.booking_id = b.id
-       WHERE p.tenant_id = ?
-       ORDER BY p.created_at DESC`;
-    let params = [req.user.tenant_id];
+    let queryStr;
+    let params;
 
     if (req.user.role === "customer") {
-      queryStr = `SELECT p.* 
-         FROM payments p
-         JOIN bookings b ON p.booking_id = b.id
-         WHERE b.user_id = ?
-         ORDER BY p.created_at DESC`;
+      queryStr = `
+        SELECT p.* FROM payments p
+        JOIN bookings b ON p.booking_id = b.id
+        WHERE b.user_id = $1
+        ORDER BY p.created_at DESC`;
       params = [req.user.id];
+    } else {
+      queryStr = `
+        SELECT p.* FROM payments p
+        JOIN bookings b ON p.booking_id = b.id
+        WHERE p.tenant_id = $1
+        ORDER BY p.created_at DESC`;
+      params = [req.user.tenant_id];
     }
 
-    const [rows] = await pool.query(queryStr, params);
+    const { rows } = await pool.query(queryStr, params);
     return res.json({ success: true, data: rows });
   } catch (error) {
     // eslint-disable-next-line no-console
@@ -307,21 +288,28 @@ router.get("/payments", async (req, res) => {
     return res.status(500).json({ success: false, message: "Failed to fetch payments" });
   }
 });
-// Basic dashboard stats for the user (total bookings, active bookings, total spent)
+
+// User dashboard stats
 router.get("/dashboard/stats", async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Customers and admins can both technically hit this, but it focuses on their personal bookings
-    const [[bookingRow]] = await pool.query(
-      "SELECT COUNT(*) AS totalBookings, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS activeBookings FROM bookings WHERE user_id = ?",
-      [userId],
+    const bookingRes = await pool.query(
+      `SELECT COUNT(*) AS "totalBookings",
+              SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS "activeBookings"
+       FROM bookings WHERE user_id = $1`,
+      [userId]
     );
 
-    const [[revenueRow]] = await pool.query(
-      "SELECT COALESCE(SUM(amount), 0) AS totalSpent FROM payments p JOIN bookings b ON p.booking_id = b.id WHERE b.user_id = ?",
-      [userId],
+    const revenueRes = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0) AS "totalSpent"
+       FROM payments p JOIN bookings b ON p.booking_id = b.id
+       WHERE b.user_id = $1`,
+      [userId]
     );
+
+    const bookingRow = bookingRes.rows[0];
+    const revenueRow = revenueRes.rows[0];
 
     return res.json({
       success: true,

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { NotificationProvider } from "@/components/NotificationProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -36,18 +37,27 @@ const App = () => (
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
-              <Route path="/dashboard/admin" element={<DashboardAdmin />} />
-              <Route path="/dashboard/user" element={<DashboardUser />} />
-              <Route path="/dashboard/superadmin" element={<DashboardSuperAdmin />} />
-              <Route path="/slots" element={<Slots />} />
-              <Route path="/booking" element={<Booking />} />
-              <Route path="/payments" element={<Payments />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/booking-history" element={<BookingHistory />} />
-              <Route path="/map" element={<ParkingMap />} />
-              <Route path="/companies" element={<Companies />} />
-              <Route path="/companies/:id" element={<CompanyDetails />} />
-              <Route path="/users" element={<Users />} />
+
+              {/* Super Admin Routes */}
+              <Route path="/dashboard/superadmin" element={<ProtectedRoute allowedRoles={["superadmin"]}><DashboardSuperAdmin /></ProtectedRoute>} />
+              <Route path="/companies" element={<ProtectedRoute allowedRoles={["superadmin"]}><Companies /></ProtectedRoute>} />
+              <Route path="/companies/:id" element={<ProtectedRoute allowedRoles={["superadmin"]}><CompanyDetails /></ProtectedRoute>} />
+              <Route path="/users" element={<ProtectedRoute allowedRoles={["superadmin"]}><Users /></ProtectedRoute>} />
+
+              {/* Admin Routes */}
+              <Route path="/dashboard/admin" element={<ProtectedRoute allowedRoles={["admin"]}><DashboardAdmin /></ProtectedRoute>} />
+              <Route path="/slots" element={<ProtectedRoute allowedRoles={["admin"]}><Slots /></ProtectedRoute>} />
+
+              {/* User Routes */}
+              <Route path="/dashboard/user" element={<ProtectedRoute allowedRoles={["user"]}><DashboardUser /></ProtectedRoute>} />
+              <Route path="/booking" element={<ProtectedRoute allowedRoles={["user"]}><Booking /></ProtectedRoute>} />
+
+              {/* Shared Protected Routes */}
+              <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
+              <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+              <Route path="/booking-history" element={<ProtectedRoute allowedRoles={["admin", "user"]}><BookingHistory /></ProtectedRoute>} />
+              <Route path="/map" element={<ProtectedRoute><ParkingMap /></ProtectedRoute>} />
+
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

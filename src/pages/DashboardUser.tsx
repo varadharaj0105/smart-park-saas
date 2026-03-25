@@ -7,9 +7,10 @@ import { Link, useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import StatCard from "@/components/StatCard";
 import { useNotification } from "@/components/NotificationProvider";
-import { CalendarCheck, CreditCard, ParkingSquare, Building2, ArrowRight, Map, Search, ChevronDown } from "lucide-react";
+import { CalendarCheck, CreditCard, ParkingSquare, Building2, ArrowRight, Map, Search, ChevronDown, QrCode, X } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { apiGetLocations, apiGetUserDashboardStats, apiGetBookings } from "@/lib/api";
+import QRCode from "react-qr-code";
 
 export default function DashboardUser() {
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
@@ -23,6 +24,7 @@ export default function DashboardUser() {
   const [stats, setStats] = useState({ totalBookings: 0, activeBookings: 0, totalSpent: 0 });
   const [myBookings, setMyBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showQrModal, setShowQrModal] = useState<{ id: number; vehicle: string; slot: number } | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -218,6 +220,14 @@ export default function DashboardUser() {
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${b.status === "active" ? "bg-accent text-accent-foreground" : "bg-secondary text-secondary-foreground"}`}>
                           {b.status}
                         </span>
+                        {b.status === "active" && (
+                          <button
+                            onClick={() => setShowQrModal({ id: b.id, vehicle: b.vehicle_number, slot: b.slot_id })}
+                            className="mt-1 sm:mt-0 sm:ml-2 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border text-xs text-foreground hover:bg-secondary transition-colors"
+                          >
+                            <QrCode className="h-3 w-3" /> Pass
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -227,6 +237,40 @@ export default function DashboardUser() {
           </div>
         </div>
       </div>
+
+      {showQrModal && (
+        <div className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowQrModal(null)}>
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-xl flex flex-col items-center relative animate-scale-in" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowQrModal(null)} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
+              <X className="h-5 w-5" />
+            </button>
+            <h3 className="font-bold text-lg mb-1">Digital Parking Pass</h3>
+            <p className="text-sm text-muted-foreground mb-6">Booking #{showQrModal.id}</p>
+            
+            <div className="bg-white p-4 rounded-xl shadow-inner mb-6">
+              <QRCode 
+                value={JSON.stringify({ 
+                  booking_id: showQrModal.id, 
+                  vehicle: showQrModal.vehicle,
+                  slot: showQrModal.slot
+                })} 
+                size={200} 
+              />
+            </div>
+            
+            <div className="w-full grid grid-cols-2 gap-4 text-center border-t border-border pt-4">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Vehicle</p>
+                <p className="font-semibold">{showQrModal.vehicle || "N/A"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Slot</p>
+                <p className="font-semibold">{showQrModal.slot}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

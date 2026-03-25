@@ -1,8 +1,12 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { Users as UsersIcon, Plus, Mail, Shield, UserCircle2 } from "lucide-react";
+import { Users as UsersIcon, Plus, Mail, Shield, UserCircle2, Download } from "lucide-react";
 import { useState, useEffect } from "react";
 import { apiGetUsers } from "@/lib/api";
 import { useNotification } from "@/components/NotificationProvider";
+import { exportToCSV } from "@/lib/csv";
+import { Pagination } from "@/components/Pagination";
+
+const ITEMS_PER_PAGE = 10;
 
 interface User {
     id: number;
@@ -15,6 +19,7 @@ interface User {
 export default function Users() {
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
     const { showNotification } = useNotification();
 
     useEffect(() => {
@@ -39,6 +44,12 @@ export default function Users() {
         }
     };
 
+    const totalPages = Math.ceil(users.length / ITEMS_PER_PAGE);
+    const paginatedData = users.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE,
+        currentPage * ITEMS_PER_PAGE
+    );
+
     return (
         <DashboardLayout>
             <div className="space-y-6">
@@ -47,6 +58,18 @@ export default function Users() {
                         <h3 className="text-xl font-bold text-foreground">User Management</h3>
                         <p className="text-sm text-muted-foreground">Manage all registered users across the system.</p>
                     </div>
+                    <button
+                        onClick={() => exportToCSV(
+                            "users_report",
+                            ["ID", "Name", "Email", "Role", "Tenant ID"],
+                            ["id", "name", "email", "role", "tenant_id"],
+                            users as unknown as Record<string, unknown>[]
+                        )}
+                        disabled={users.length === 0}
+                        className="inline-flex items-center gap-2 px-4 h-10 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-40"
+                    >
+                        <Download className="h-4 w-4" /> Export CSV
+                    </button>
                 </div>
 
                 {loading ? (
@@ -64,7 +87,7 @@ export default function Users() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
-                                    {users.map((user) => (
+                                    {paginatedData.map((user) => (
                                         <tr key={user.id} className="hover:bg-muted/30 transition-colors">
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
@@ -107,6 +130,15 @@ export default function Users() {
                                 </tbody>
                             </table>
                         </div>
+                        {users.length > 0 && (
+                            <div className="p-4 border-t border-border">
+                                <Pagination
+                                    currentPage={currentPage}
+                                    totalPages={totalPages}
+                                    onPageChange={setCurrentPage}
+                                />
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

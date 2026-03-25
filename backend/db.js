@@ -1,37 +1,35 @@
 import dotenv from "dotenv";
-import mysql from "mysql2/promise";
+import pg from "pg";
 
-// Load environment variables from .env
 dotenv.config();
 
-// Create a MySQL connection pool using mysql2
-export const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
+const { Pool } = pg;
+
+// Create a PostgreSQL connection pool
+export const pool = new Pool({
+  host: process.env.DB_HOST || "localhost",
+  user: process.env.DB_USER || "postgres",
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
+  port: Number(process.env.DB_PORT) || 5432,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
 });
-
-// Optional helper to get a dedicated connection
-export async function getConnection() {
-  return pool.getConnection();
-}
 
 // Test the database connection when the server starts
 export async function testConnection() {
+  let client;
   try {
-    const connection = await pool.getConnection();
-    await connection.ping();
-    connection.release();
+    client = await pool.connect();
+    await client.query("SELECT 1");
     // eslint-disable-next-line no-console
-    console.log("✅ MySQL connected successfully");
+    console.log("✅ PostgreSQL connected successfully");
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error("❌ MySQL connection failed:", error.message);
+    console.error("❌ PostgreSQL connection failed:", error.message);
     process.exit(1);
+  } finally {
+    if (client) client.release();
   }
 }
-

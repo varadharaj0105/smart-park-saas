@@ -1,9 +1,13 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { Building2, Plus, Mail, MapPin, User, Hash } from "lucide-react";
+import { Building2, Plus, Mail, MapPin, User, Hash, Download } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiGetCompanies } from "@/lib/api";
 import { useNotification } from "@/components/NotificationProvider";
+import { exportToCSV } from "@/lib/csv";
+import { Pagination } from "@/components/Pagination";
+
+const ITEMS_PER_PAGE = 10;
 
 interface Company {
     id: number;
@@ -18,6 +22,7 @@ interface Company {
 export default function Companies() {
     const [companies, setCompanies] = useState<Company[]>([]);
     const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
     const { showNotification } = useNotification();
     const navigate = useNavigate();
 
@@ -43,6 +48,12 @@ export default function Companies() {
         }
     };
 
+    const totalPages = Math.ceil(companies.length / ITEMS_PER_PAGE);
+    const paginatedData = companies.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE,
+        currentPage * ITEMS_PER_PAGE
+    );
+
     return (
         <DashboardLayout>
             <div className="space-y-6">
@@ -51,20 +62,35 @@ export default function Companies() {
                         <h3 className="text-xl font-bold text-foreground">Registered Companies</h3>
                         <p className="text-sm text-muted-foreground">Manage all companies and their assigned admins.</p>
                     </div>
-                    <button
-                        onClick={() => navigate('/map')}
-                        className="inline-flex items-center gap-2 px-4 h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-                    >
-                        <Plus className="h-4 w-4" /> Add Company
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => exportToCSV(
+                                "companies_report",
+                                ["ID", "Name", "Admin Name", "Admin Email", "Latitude", "Longitude"],
+                                ["id", "name", "admin_name", "admin_email", "latitude", "longitude"],
+                                companies as unknown as Record<string, unknown>[]
+                            )}
+                            disabled={companies.length === 0}
+                            className="inline-flex items-center gap-2 px-4 h-10 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-40"
+                        >
+                            <Download className="h-4 w-4" /> Export CSV
+                        </button>
+                        <button
+                            onClick={() => navigate('/map')}
+                            className="inline-flex items-center gap-2 px-4 h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+                        >
+                            <Plus className="h-4 w-4" /> Add Company
+                        </button>
+                    </div>
                 </div>
 
                 {loading ? (
                     <div className="text-center p-12 text-muted-foreground">Loading companies...</div>
                 ) : (
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {companies.map((company) => (
-                            <div
+                    <div className="space-y-4">
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            {paginatedData.map((company) => (
+                                <div
                                 key={company.id}
                                 onClick={() => navigate(`/companies/${company.id}`)}
                                 className="bg-card border border-border rounded-xl p-5 hover:border-primary/50 transition-colors cursor-pointer"
@@ -102,6 +128,16 @@ export default function Companies() {
                             </div>
                         ))}
                     </div>
+                    {companies.length > 0 && (
+                        <div className="pr-2 pb-2">
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                onPageChange={setCurrentPage}
+                            />
+                        </div>
+                    )}
+                </div>
                 )}
             </div>
         </DashboardLayout>

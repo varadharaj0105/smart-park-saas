@@ -1,27 +1,25 @@
 import express from "express";
+import bcrypt from "bcryptjs";
 import { pool } from "../db.js";
 import { authMiddleware, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// Super admin only routes
 router.use(authMiddleware);
 router.use(requireRole(["super_admin"]));
 
-// List companies (tenants)
+// List all companies with admin info
 router.get("/companies", async (req, res) => {
   try {
-    const query = `
-      SELECT 
-        c.*,
-        u.id AS admin_id,
-        u.name AS admin_name,
-        u.email AS admin_email
+    const { rows } = await pool.query(`
+      SELECT c.*,
+             u.id AS admin_id,
+             u.name AS admin_name,
+             u.email AS admin_email
       FROM companies c
       LEFT JOIN users u ON c.id = u.tenant_id AND u.role = 'company_admin'
       ORDER BY c.id DESC
-    `;
-    const [rows] = await pool.query(query);
+    `);
     return res.json({ success: true, data: rows });
   } catch (error) {
     // eslint-disable-next-line no-console
@@ -30,90 +28,73 @@ router.get("/companies", async (req, res) => {
   }
 });
 
-// Get detailed company analytics and info by ID
+// Get detailed company info + stats + recent payments
 router.get("/companies/:id", async (req, res) => {
   const { id } = req.params;
+  const client = await pool.connect();
   try {
-    const connection = await pool.getConnection();
+    const companyRes = await client.query(`
+      SELECT c.*, u.id AS admin_id, u.name AS admin_name, u.email AS admin_email
+      FROM companies c
+      LEFT JOIN users u ON c.id = u.tenant_id AND u.role = 'company_admin'
+      WHERE c.id = $1
+    `, [id]);
 
-    try {
-      // 1. Company info
-      const [companyRows] = await connection.query(`
-        SELECT 
-          c.*,
-          u.id AS admin_id,
-          u.name AS admin_name,
-          u.email AS admin_email
-        FROM companies c
-        LEFT JOIN users u ON c.id = u.tenant_id AND u.role = 'company_admin'
-        WHERE c.id = ?
-      `, [id]);
-
-      if (companyRows.length === 0) {
-        connection.release();
-        return res.status(404).json({ success: false, message: "Company not found" });
-      }
-
-      const company = companyRows[0];
-
-      // 2. Stats: slots, bookings
-      const [slotStats] = await connection.query(`
-        SELECT 
-          COUNT(*) as total_slots,
-          SUM(IF(status = 'available', 1, 0)) as available_slots
-        FROM slots WHERE tenant_id = ?
-      `, [id]);
-
-      const [bookingStats] = await connection.query(`
-        SELECT COUNT(*) as active_bookings 
-        FROM bookings 
-        WHERE tenant_id = ? AND status = 'active'
-      `, [id]);
-
-      // 3. Total revenue
-      const [revenueStats] = await connection.query(`
-        SELECT SUM(p.amount) as total_revenue
-        FROM payments p
-        JOIN bookings b ON p.booking_id = b.id
-        WHERE b.tenant_id = ?
-      `, [id]);
-
-      // 4. Recent payments
-      const [recentPayments] = await connection.query(`
-        SELECT p.*, b.status as booking_status, b.user_id 
-        FROM payments p 
-        JOIN bookings b ON p.booking_id = b.id 
-        WHERE b.tenant_id = ? 
-        ORDER BY p.created_at DESC 
-        LIMIT 10
-      `, [id]);
-
-      connection.release();
-
-      return res.json({
-        success: true,
-        data: {
-          company,
-          stats: {
-            total_slots: slotStats[0].total_slots || 0,
-            available_slots: slotStats[0].available_slots || 0,
-            active_bookings: bookingStats[0].active_bookings || 0,
-            total_revenue: revenueStats[0].total_revenue || 0,
-          },
-          payments: recentPayments
-        }
-      });
-    } catch (err) {
-      connection.release();
-      throw err;
+    if (companyRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Company not found" });
     }
+
+    const slotStats = await client.query(
+      `SELECT COUNT(*) AS total_slots,
+              SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) AS available_slots
+       FROM slots WHERE tenant_id = $1`,
+      [id]
+    );
+
+    const bookingStats = await client.query(
+      `SELECT COUNT(*) AS total_bookings,
+              SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_bookings
+       FROM bookings WHERE tenant_id = $1`,
+      [id]
+    );
+
+    const revenueStats = await client.query(
+      `SELECT COALESCE(SUM(amount), 0) AS total_revenue FROM payments WHERE tenant_id = $1`,
+      [id]
+    );
+
+    const recentPayments = await client.query(
+      `SELECT p.*, b.user_id FROM payments p
+       JOIN bookings b ON p.booking_id = b.id
+       WHERE p.tenant_id = $1
+       ORDER BY p.created_at DESC LIMIT 10`,
+      [id]
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        company: companyRes.rows[0],
+        stats: {
+          total_slots: Number(slotStats.rows[0].total_slots || 0),
+          available_slots: Number(slotStats.rows[0].available_slots || 0),
+          total_bookings: Number(bookingStats.rows[0].total_bookings || 0),
+          active_bookings: Number(bookingStats.rows[0].active_bookings || 0),
+          total_revenue: Number(revenueStats.rows[0].total_revenue || 0),
+        },
+        payments: recentPayments.rows,
+      },
+    });
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error("Get company details error:", error.message);
     return res.status(500).json({ success: false, message: "Failed to fetch company details" });
+  } finally {
+    client.release();
   }
 });
 
-// Create a new Company and Admin via Super Admin Map click
+// Create a new Company + Admin user (transaction)
 router.post("/companies", async (req, res) => {
   const { company_name, latitude, longitude, admin_name, admin_email, admin_password } = req.body;
 
@@ -121,150 +102,122 @@ router.post("/companies", async (req, res) => {
     return res.status(400).json({ success: false, message: "All fields are required" });
   }
 
+  const client = await pool.connect();
   try {
-    const connection = await pool.getConnection();
-    try {
-      await connection.beginTransaction();
+    await client.query("BEGIN");
 
-      // Check if email is already in use
-      const [existingUser] = await connection.query("SELECT id FROM users WHERE email = ? LIMIT 1", [admin_email]);
-      if (existingUser.length > 0) {
-        throw new Error("Email already registered");
-      }
+    const existingUser = await client.query("SELECT id FROM users WHERE email = $1 LIMIT 1", [admin_email]);
+    if (existingUser.rows.length > 0) throw new Error("Email already registered");
 
-      // Create company
-      const [compResult] = await connection.query(
-        "INSERT INTO companies (name, latitude, longitude) VALUES (?, ?, ?)",
-        [company_name, latitude, longitude]
-      );
-      const tenantId = compResult.insertId;
+    const compResult = await client.query(
+      "INSERT INTO companies (name, latitude, longitude) VALUES ($1, $2, $3) RETURNING id",
+      [company_name, latitude, longitude]
+    );
+    const tenantId = compResult.rows[0].id;
 
-      // Create admin user for that company
-      await connection.query(
-        "INSERT INTO users (name, email, password, role, tenant_id, company_name) VALUES (?, ?, ?, 'company_admin', ?, ?)",
-        [admin_name, admin_email, admin_password, tenantId, company_name]
-      );
+    const hashedPassword = await bcrypt.hash(admin_password, 10);
 
-      await connection.commit();
-      connection.release();
+    await client.query(
+      "INSERT INTO users (name, email, password, role, tenant_id, company_name) VALUES ($1, $2, $3, 'company_admin', $4, $5)",
+      [admin_name, admin_email, hashedPassword, tenantId, company_name]
+    );
 
-      return res.json({ success: true, message: "Company and Admin created successfully!" });
-    } catch (error) {
-      await connection.rollback();
-      connection.release();
-      throw error;
-    }
+    await client.query("COMMIT");
+    return res.json({ success: true, message: "Company and Admin created successfully!" });
   } catch (error) {
+    await client.query("ROLLBACK");
     // eslint-disable-next-line no-console
     console.error("Create company error:", error.message);
     return res.status(500).json({ success: false, message: error.message || "Failed to create company" });
+  } finally {
+    client.release();
   }
 });
 
-// Update an existing Company and its Admin
+// Update Company + Admin (transaction)
 router.put("/companies/:id", async (req, res) => {
   const { id } = req.params;
   const { company_name, latitude, longitude, admin_name, admin_email, admin_password } = req.body;
 
+  const client = await pool.connect();
   try {
-    const connection = await pool.getConnection();
-    try {
-      await connection.beginTransaction();
+    await client.query("BEGIN");
 
-      // Update company
-      if (company_name || latitude || longitude) {
-        await connection.query(
-          "UPDATE companies SET name = COALESCE(?, name), latitude = COALESCE(?, latitude), longitude = COALESCE(?, longitude) WHERE id = ?",
-          [company_name, latitude, longitude, id]
+    if (company_name || latitude || longitude) {
+      await client.query(
+        "UPDATE companies SET name = COALESCE($1, name), latitude = COALESCE($2, latitude), longitude = COALESCE($3, longitude) WHERE id = $4",
+        [company_name || null, latitude || null, longitude || null, id]
+      );
+    }
+
+    const adminRes = await client.query(
+      "SELECT id FROM users WHERE tenant_id = $1 AND role = 'company_admin' LIMIT 1",
+      [id]
+    );
+
+    if (adminRes.rows.length > 0) {
+      const adminId = adminRes.rows[0].id;
+      if (admin_password) {
+        const hashedPassword = await bcrypt.hash(admin_password, 10);
+        await client.query(
+          "UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email), password = $3, company_name = COALESCE($4, company_name) WHERE id = $5",
+          [admin_name || null, admin_email || null, hashedPassword, company_name || null, adminId]
+        );
+      } else {
+        await client.query(
+          "UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email), company_name = COALESCE($3, company_name) WHERE id = $4",
+          [admin_name || null, admin_email || null, company_name || null, adminId]
         );
       }
-
-      // Find the company_admin user for this tenant
-      const [adminRows] = await connection.query(
-        "SELECT id FROM users WHERE tenant_id = ? AND role = 'company_admin' LIMIT 1",
-        [id]
-      );
-
-      if (adminRows.length > 0) {
-        const adminId = adminRows[0].id;
-        // Optionally update password if provided
-        if (admin_password) {
-          await connection.query(
-            "UPDATE users SET name = COALESCE(?, name), email = COALESCE(?, email), password = ?, company_name = COALESCE(?, company_name) WHERE id = ?",
-            [admin_name, admin_email, admin_password, company_name, adminId]
-          );
-        } else {
-          await connection.query(
-            "UPDATE users SET name = COALESCE(?, name), email = COALESCE(?, email), company_name = COALESCE(?, company_name) WHERE id = ?",
-            [admin_name, admin_email, company_name, adminId]
-          );
-        }
-      }
-
-      await connection.commit();
-      connection.release();
-
-      return res.json({ success: true, message: "Company updated successfully!" });
-    } catch (error) {
-      await connection.rollback();
-      connection.release();
-      throw error;
     }
+
+    await client.query("COMMIT");
+    return res.json({ success: true, message: "Company updated successfully!" });
   } catch (error) {
+    await client.query("ROLLBACK");
     // eslint-disable-next-line no-console
     console.error("Update company error:", error.message);
     return res.status(500).json({ success: false, message: error.message || "Failed to update company" });
+  } finally {
+    client.release();
   }
 });
 
-// Delete a Company
+// Delete Company + cascade all data (transaction)
 router.delete("/companies/:id", async (req, res) => {
   const { id } = req.params;
 
+  const client = await pool.connect();
   try {
-    const connection = await pool.getConnection();
-    try {
-      await connection.beginTransaction();
+    await client.query("BEGIN");
 
-      // Delete payments for bookings of this tenant
-      await connection.query(
-        "DELETE p FROM payments p INNER JOIN bookings b ON p.booking_id = b.id WHERE b.tenant_id = ?",
-        [id]
-      );
+    // Delete payments for bookings of this tenant
+    await client.query(
+      "DELETE FROM payments WHERE booking_id IN (SELECT id FROM bookings WHERE tenant_id = $1)",
+      [id]
+    );
+    await client.query("DELETE FROM bookings WHERE tenant_id = $1", [id]);
+    await client.query("DELETE FROM slots WHERE tenant_id = $1", [id]);
+    await client.query("DELETE FROM users WHERE tenant_id = $1", [id]);
+    await client.query("DELETE FROM companies WHERE id = $1", [id]);
 
-      // Delete bookings
-      await connection.query("DELETE FROM bookings WHERE tenant_id = ?", [id]);
-
-      // Delete slots
-      await connection.query("DELETE FROM slots WHERE tenant_id = ?", [id]);
-
-      // Delete users (including the company admin)
-      await connection.query("DELETE FROM users WHERE tenant_id = ?", [id]);
-
-      // Delete the company
-      await connection.query("DELETE FROM companies WHERE id = ?", [id]);
-
-      await connection.commit();
-      connection.release();
-
-      return res.json({ success: true, message: "Company and all associated data deleted successfully!" });
-    } catch (error) {
-      await connection.rollback();
-      connection.release();
-      throw error;
-    }
+    await client.query("COMMIT");
+    return res.json({ success: true, message: "Company and all associated data deleted successfully!" });
   } catch (error) {
+    await client.query("ROLLBACK");
     // eslint-disable-next-line no-console
     console.error("Delete company error:", error.message);
     return res.status(500).json({ success: false, message: error.message || "Failed to delete company" });
+  } finally {
+    client.release();
   }
 });
 
-// List users across tenants
+// List all users
 router.get("/users", async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      "SELECT id, name, email, role, tenant_id FROM users ORDER BY id DESC",
+    const { rows } = await pool.query(
+      "SELECT id, name, email, role, tenant_id FROM users ORDER BY id DESC"
     );
     return res.json({ success: true, data: rows });
   } catch (error) {
@@ -274,11 +227,15 @@ router.get("/users", async (req, res) => {
   }
 });
 
-// Fetch ALL payments globally for Super Admin
+// All payments globally
 router.get("/payments", async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      "SELECT p.*, b.status as booking_status, b.user_id, c.name as company_name FROM payments p JOIN bookings b ON p.booking_id = b.id LEFT JOIN companies c ON p.tenant_id = c.id ORDER BY p.created_at DESC"
+    const { rows } = await pool.query(
+      `SELECT p.*, b.status as booking_status, b.user_id, c.name as company_name
+       FROM payments p
+       JOIN bookings b ON p.booking_id = b.id
+       LEFT JOIN companies c ON p.tenant_id = c.id
+       ORDER BY p.created_at DESC`
     );
     return res.json({ success: true, data: rows });
   } catch (error) {

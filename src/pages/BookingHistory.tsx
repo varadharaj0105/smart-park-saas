@@ -4,8 +4,13 @@
 
 import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Search, Filter, CalendarCheck, CreditCard } from "lucide-react";
+import { Search, Filter, CalendarCheck, CreditCard, Download, QrCode, X } from "lucide-react";
 import { apiExitBooking, apiGetBookings } from "@/lib/api";
+import { exportToCSV } from "@/lib/csv";
+import { Pagination } from "@/components/Pagination";
+import QRCode from "react-qr-code";
+
+const ITEMS_PER_PAGE = 10;
 
 interface BookingRow {
   id: number;
@@ -23,8 +28,10 @@ export default function BookingHistory() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [payingId, setPayingId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const [showPayModal, setShowPayModal] = useState(false);
   const [paymentStage, setPaymentStage] = useState<"idle" | "calculating" | "processing" | "success">("idle");
+  const [showQrModal, setShowQrModal] = useState<{ id: number; vehicle: string; slot: number } | null>(null);
 
   const loadBookings = () => {
     apiGetBookings()
@@ -40,6 +47,10 @@ export default function BookingHistory() {
     loadBookings();
   }, []);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
+
   const filtered = rows.filter((b) => {
     const matchesSearch =
       b.vehicle_number.toLowerCase().includes(search.toLowerCase()) ||
@@ -47,6 +58,12 @@ export default function BookingHistory() {
     const matchesStatus = statusFilter === "all" || b.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginatedData = filtered.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const statusColors: Record<string, string> = {
     active: "bg-accent text-accent-foreground",
@@ -57,9 +74,22 @@ export default function BookingHistory() {
   return (
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
-        <div>
-          <h3 className="text-xl font-bold text-foreground">Booking History</h3>
-          <p className="text-sm text-muted-foreground">View all your past and current bookings</p>
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h3 className="text-xl font-bold text-foreground">Booking History</h3>
+            <p className="text-sm text-muted-foreground">View all your past and current bookings</p>
+          </div>
+          <button
+            onClick={() => exportToCSV(
+              "bookings_report",
+              ["ID", "Vehicle", "Slot", "Company", "Date", "Duration (hrs)", "Cost ($)", "Status"],
+              ["id", "vehicle_number", "slot_id", "company_name", "start_time", "duration", "total_amount", "status"],
+              filtered.map(b => ({ ...b, start_time: new Date(b.start_time).toLocaleDateString(), total_amount: b.total_amount != null ? Number(b.total_amount).toFixed(2) : "" }))
+            )}
+            className="inline-flex items-center gap-2 px-4 h-10 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-accent transition-colors"
+          >
+            <Download className="h-4 w-4" /> Export CSV
+          </button>
         </div>
 
         {/* Search & Filter */}
@@ -113,7 +143,7 @@ export default function BookingHistory() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((b) => (
+                  paginatedData.map((b) => (
                     <tr key={b.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
                       <td className="px-6 py-3 font-medium text-foreground">{b.id}</td>
                       <td className="px-6 py-3 text-foreground">{b.vehicle_number}</td>
@@ -132,16 +162,25 @@ export default function BookingHistory() {
                             {b.status}
                           </span>
                           {b.status === "active" && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPayingId(b.id);
-                                setShowPayModal(true);
-                              }}
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border text-xs text-foreground hover:bg-secondary"
-                            >
-                              <CreditCard className="h-3 w-3" /> Exit &amp; Pay
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setShowQrModal({ id: b.id, vehicle: b.vehicle_number, slot: b.slot_id })}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border text-xs text-foreground hover:bg-secondary"
+                              >
+                                <QrCode className="h-3 w-3" /> Pass
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPayingId(b.id);
+                                  setShowPayModal(true);
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border text-xs text-foreground hover:bg-secondary"
+                              >
+                                <CreditCard className="h-3 w-3" /> Exit &amp; Pay
+                              </button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -151,6 +190,15 @@ export default function BookingHistory() {
               </tbody>
             </table>
           </div>
+          {filtered.length > 0 && (
+            <div className="p-4 border-t border-border">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
+            </div>
+          )}
         </div>
 
         {/* Exit & Pay modal with simple animation */}
@@ -224,6 +272,41 @@ export default function BookingHistory() {
           </div>
         )}
       </div>
+
+      {/* QR Code Pass Modal */}
+      {showQrModal && (
+        <div className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowQrModal(null)}>
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm shadow-xl flex flex-col items-center relative animate-scale-in" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowQrModal(null)} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
+              <X className="h-5 w-5" />
+            </button>
+            <h3 className="font-bold text-lg mb-1">Digital Parking Pass</h3>
+            <p className="text-sm text-muted-foreground mb-6">Booking #{showQrModal.id}</p>
+            
+            <div className="bg-white p-4 rounded-xl shadow-inner mb-6">
+              <QRCode 
+                value={JSON.stringify({ 
+                  booking_id: showQrModal.id, 
+                  vehicle: showQrModal.vehicle,
+                  slot: showQrModal.slot
+                })} 
+                size={200} 
+              />
+            </div>
+            
+            <div className="w-full grid grid-cols-2 gap-4 text-center border-t border-border pt-4">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Vehicle</p>
+                <p className="font-semibold">{showQrModal.vehicle || "N/A"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Slot</p>
+                <p className="font-semibold">{showQrModal.slot}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

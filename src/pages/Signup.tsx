@@ -1,5 +1,5 @@
 // ============================================
-// Signup Page
+// Signup Page — Customer registration only
 // ============================================
 
 import { useState } from "react";
@@ -9,13 +9,7 @@ import { apiSignup } from "@/lib/api";
 import { useNotification } from "@/components/NotificationProvider";
 
 export default function Signup() {
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    password: "",
-    role: "user" as "user" | "admin",
-    company_name: "",
-  });
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { showNotification } = useNotification();
@@ -29,14 +23,9 @@ export default function Signup() {
       showNotification("Please fill in all required fields", "warning");
       return;
     }
-    if (form.role === "admin" && !form.company_name) {
-      showNotification("Company name is required for admin registration", "warning");
-      return;
-    }
-
     setLoading(true);
     try {
-      await apiSignup(form);
+      await apiSignup({ ...form, role: "user" });
       showNotification("Account created! Please login.", "success");
       navigate("/login");
     } catch (err: any) {
@@ -60,27 +49,9 @@ export default function Signup() {
 
         <div className="bg-card border border-border rounded-xl p-8 shadow-sm">
           <h2 className="text-2xl font-bold text-foreground mb-1">Create account</h2>
-          <p className="text-sm text-muted-foreground mb-6">Register as a user or company admin</p>
+          <p className="text-sm text-muted-foreground mb-6">Register to start booking parking slots</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Role toggle */}
-            <div className="flex rounded-lg border border-border overflow-hidden">
-              {(["user", "admin"] as const).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => update("role", r)}
-                  className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                    form.role === r
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-card text-muted-foreground hover:bg-secondary"
-                  }`}
-                >
-                  {r === "user" ? "User" : "Company Admin"}
-                </button>
-              ))}
-            </div>
-
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Full Name</label>
               <input
@@ -113,19 +84,6 @@ export default function Signup() {
                 className="w-full h-10 px-3 rounded-lg border border-input bg-background text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-
-            {form.role === "admin" && (
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Company Name</label>
-                <input
-                  type="text"
-                  value={form.company_name}
-                  onChange={(e) => update("company_name", e.target.value)}
-                  placeholder="Your Company"
-                  className="w-full h-10 px-3 rounded-lg border border-input bg-background text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-            )}
 
             <button
               type="submit"

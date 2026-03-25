@@ -7,8 +7,12 @@ import DashboardLayout from "@/components/DashboardLayout";
 import StatCard from "@/components/StatCard";
 import { useNotification } from "@/components/NotificationProvider";
 import { getAuth } from "@/lib/auth";
-import { CreditCard, DollarSign, Receipt, TrendingUp, Plus, X, Search } from "lucide-react";
+import { CreditCard, DollarSign, Receipt, TrendingUp, Plus, X, Search, Download } from "lucide-react";
 import { apiExitBooking, apiGetBookings, apiGetPayments, apiGetSuperPayments } from "@/lib/api";
+import { exportToCSV } from "@/lib/csv";
+import { Pagination } from "@/components/Pagination";
+
+const ITEMS_PER_PAGE = 10;
 
 interface PaymentRow {
   id: number;
@@ -28,6 +32,7 @@ export default function Payments() {
   const [autoAmount, setAutoAmount] = useState<number>(0);
   const [calculating, setCalculating] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [paymentStage, setPaymentStage] = useState<"idle" | "initiating" | "processing" | "success">("idle");
   const { showNotification } = useNotification();
   const auth = getAuth();
@@ -75,10 +80,20 @@ export default function Payments() {
     }
   }, [payForm.booking_id, bookings]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
   const filtered = payments.filter(
     (p) =>
       String(p.id).toLowerCase().includes(search.toLowerCase()) ||
       String(p.booking_id).toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginatedData = filtered.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
   );
 
   const handlePay = async () => {
@@ -126,14 +141,28 @@ export default function Payments() {
             <h3 className="text-xl font-bold text-foreground">Payments</h3>
             <p className="text-sm text-muted-foreground">View all payment transactions</p>
           </div>
-          {(role === "user" || role === "admin" || role === "superadmin") && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowPayModal(true)}
-              className="inline-flex items-center gap-2 px-4 h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+              onClick={() => exportToCSV(
+                "payments_report",
+                ["ID", "Booking ID", role === "superadmin" ? "Company" : "", "Amount ($)", "Method", "Status", "Date"]
+                  .filter(Boolean) as string[],
+                ["id", "booking_id", ...(role === "superadmin" ? ["company_name"] : []), "amount", "method", "status", "created_at"],
+                filtered.map(p => ({ ...p, created_at: new Date(p.created_at).toLocaleDateString() }))
+              )}
+              className="inline-flex items-center gap-2 px-4 h-10 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-accent transition-colors"
             >
-              <Plus className="h-4 w-4" /> {role === "user" ? "Pay Booking" : "Record Payment"}
+              <Download className="h-4 w-4" /> Export CSV
             </button>
-          )}
+            {(role === "user" || role === "admin" || role === "superadmin") && (
+              <button
+                onClick={() => setShowPayModal(true)}
+                className="inline-flex items-center gap-2 px-4 h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+              >
+                <Plus className="h-4 w-4" /> {role === "user" ? "Pay Booking" : "Record Payment"}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Stats */}
@@ -183,7 +212,7 @@ export default function Payments() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((p) => (
+                {paginatedData.map((p) => (
                   <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
                     <td className="px-6 py-3 font-medium text-foreground">{p.id}</td>
                     <td className="px-6 py-3 text-foreground">{p.booking_id}</td>
@@ -212,6 +241,15 @@ export default function Payments() {
               </tbody>
             </table>
           </div>
+          {filtered.length > 0 && (
+            <div className="p-4 border-t border-border">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
+            </div>
+          )}
         </div>
 
         {/* Pay Modal */}

@@ -5,8 +5,12 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useNotification } from "@/components/NotificationProvider";
-import { Plus, Trash2, Edit2, X, MapPin, Car } from "lucide-react";
+import { Plus, Trash2, Edit2, X, MapPin, Car, Download } from "lucide-react";
 import { apiCreateSlot, apiDeleteSlot, apiGetSlots, apiUpdateSlot } from "@/lib/api";
+import { exportToCSV } from "@/lib/csv";
+import { Pagination } from "@/components/Pagination";
+
+const ITEMS_PER_PAGE = 20;
 
 interface Slot {
   id: number;
@@ -22,6 +26,7 @@ export default function Slots() {
   const [editSlotData, setEditSlotData] = useState<Slot | null>(null);
   const [newSlot, setNewSlot] = useState({ slot_number: "", floor: "", type: "Car" });
   const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const { showNotification } = useNotification();
 
   const statusColors: Record<string, string> = {
@@ -79,6 +84,12 @@ export default function Slots() {
   const available = slots.filter((s) => s.status === "available").length;
   const occupied = slots.filter((s) => s.status === "occupied").length;
 
+  const totalPages = Math.ceil(slots.length / ITEMS_PER_PAGE);
+  const paginatedData = slots.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   const updateSlot = async () => {
     if (!editSlotData || !editSlotData.slot_number) {
       showNotification("Please provide a slot number", "warning");
@@ -113,6 +124,18 @@ export default function Slots() {
           </div>
           <div className="flex items-center gap-3">
             <button
+              onClick={() => exportToCSV(
+                "slots_report",
+                ["ID", "Slot Number", "Floor", "Type", "Status"],
+                ["id", "slot_number", "floor", "type", "status"],
+                slots as unknown as Record<string, unknown>[]
+              )}
+              disabled={slots.length === 0}
+              className="inline-flex items-center gap-2 px-4 h-10 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-40"
+            >
+              <Download className="h-4 w-4" /> Export CSV
+            </button>
+            <button
               onClick={() => setShowModal(true)}
               disabled={loading}
               className="inline-flex items-center gap-2 px-4 h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
@@ -132,9 +155,10 @@ export default function Slots() {
               No parking bays configured yet. Click "Add New Slot" to begin building your map.
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {slots.map((slot) => {
-                const isAvailable = slot.status === "available";
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {paginatedData.map((slot) => {
+                  const isAvailable = slot.status === "available";
 
                 let slotStyle = "bg-muted border-border/50 opacity-60 cursor-not-allowed";
                 let iconStyle = "text-muted-foreground";
@@ -167,6 +191,14 @@ export default function Slots() {
                 );
               })}
             </div>
+            {slots.length > 0 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
+            )}
+          </div>
           )}
         </div>
 

@@ -1,29 +1,17 @@
 -- ============================================
--- Smart Parking SaaS - Database Setup Script
+-- Smart Parking SaaS - PostgreSQL Schema
 -- ============================================
--- This script will:
--- 1. Create the database `smart_park_saas`
--- 2. Create all required tables
--- 3. Insert a few sample records (one super admin, one company, one company admin, one customer, sample slots)
---
--- How to run (from terminal / MySQL shell):
---   mysql -u your_user -p < backend/schema.sql
---
--- Then in your .env set:
---   DB_NAME=smart_park_saas
+-- Run with: psql -U postgres -f backend/schema.sql
 
--- 1) Create database and use it
-CREATE DATABASE IF NOT EXISTS smart_park_saas
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
-
-USE smart_park_saas;
+-- 1) Create database (run as superuser if needed)
+-- CREATE DATABASE smart_park_saas;
+-- \c smart_park_saas
 
 -- 2) Tables
 
 -- Companies (tenants)
 CREATE TABLE IF NOT EXISTS companies (
-  id INT AUTO_INCREMENT PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   latitude DECIMAL(10,8) DEFAULT NULL,
   longitude DECIMAL(11,8) DEFAULT NULL,
@@ -31,93 +19,86 @@ CREATE TABLE IF NOT EXISTS companies (
 );
 
 -- Users
--- role values used by backend: 'super_admin', 'company_admin', 'customer'
 CREATE TABLE IF NOT EXISTS users (
-  id INT AUTO_INCREMENT PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   email VARCHAR(255) NOT NULL UNIQUE,
   password VARCHAR(255) NOT NULL,
-  role ENUM('super_admin', 'company_admin', 'customer') NOT NULL DEFAULT 'customer',
-  tenant_id INT NOT NULL,
+  role VARCHAR(50) NOT NULL DEFAULT 'customer' CHECK (role IN ('super_admin', 'company_admin', 'customer')),
+  tenant_id INT REFERENCES companies(id),
   company_name VARCHAR(255),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (tenant_id) REFERENCES companies(id)
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Parking slots
+-- Slots
 CREATE TABLE IF NOT EXISTS slots (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  tenant_id INT NOT NULL,
+  id SERIAL PRIMARY KEY,
+  tenant_id INT NOT NULL REFERENCES companies(id),
   slot_number VARCHAR(50) NOT NULL,
-  floor VARCHAR(50) NOT NULL,
-  type VARCHAR(50) NOT NULL,
-  status ENUM('available', 'occupied', 'maintenance') NOT NULL DEFAULT 'available',
-  price_per_hour DECIMAL(10,2) NOT NULL DEFAULT 5.00,
-  FOREIGN KEY (tenant_id) REFERENCES companies(id)
+  floor VARCHAR(50),
+  type VARCHAR(50) DEFAULT 'Car',
+  status VARCHAR(50) NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'occupied', 'maintenance')),
+  price_per_hour DECIMAL(8,2) DEFAULT 5.00,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Bookings
 CREATE TABLE IF NOT EXISTS bookings (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  tenant_id INT NOT NULL,
-  user_id INT NOT NULL,
-  slot_id INT NOT NULL,
+  id SERIAL PRIMARY KEY,
+  tenant_id INT NOT NULL REFERENCES companies(id),
+  user_id INT NOT NULL REFERENCES users(id),
+  slot_id INT NOT NULL REFERENCES slots(id),
   vehicle_number VARCHAR(50) NOT NULL,
-  start_time DATETIME NOT NULL,
-  duration INT NOT NULL,
-  end_time DATETIME NULL,
-  status ENUM('active', 'completed', 'cancelled') NOT NULL DEFAULT 'active',
-  total_amount DECIMAL(10,2) NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (tenant_id) REFERENCES companies(id),
-  FOREIGN KEY (user_id) REFERENCES users(id),
-  FOREIGN KEY (slot_id) REFERENCES slots(id)
+  start_time TIMESTAMP NOT NULL,
+  duration INT NOT NULL DEFAULT 1,
+  end_time TIMESTAMP,
+  status VARCHAR(50) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled')),
+  total_amount DECIMAL(8,2),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Payments
 CREATE TABLE IF NOT EXISTS payments (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  tenant_id INT NOT NULL,
-  booking_id INT NOT NULL,
-  amount DECIMAL(10,2) NOT NULL,
-  method VARCHAR(50) NOT NULL,
-  status ENUM('paid', 'pending', 'refunded') NOT NULL DEFAULT 'paid',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (tenant_id) REFERENCES companies(id),
-  FOREIGN KEY (booking_id) REFERENCES bookings(id)
+  id SERIAL PRIMARY KEY,
+  tenant_id INT NOT NULL REFERENCES companies(id),
+  booking_id INT NOT NULL REFERENCES bookings(id),
+  amount DECIMAL(8,2) NOT NULL,
+  method VARCHAR(50) DEFAULT 'card',
+  status VARCHAR(50) NOT NULL DEFAULT 'paid' CHECK (status IN ('paid', 'pending', 'refunded')),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3) Seed data (simple demo)
+-- 3) Seed data
 
 -- One company / tenant
 INSERT INTO companies (name, latitude, longitude)
 VALUES ('Downtown Parking Co.', 28.6315, 77.2167)
-ON DUPLICATE KEY UPDATE name = VALUES(name);
+ON CONFLICT DO NOTHING;
 
--- Capture tenant id (assumes first row)
-SET @tenant1 := (SELECT id FROM companies WHERE name = 'Downtown Parking Co.' LIMIT 1);
-
--- Super admin (global)
+-- Super admin
 INSERT INTO users (name, email, password, role, tenant_id, company_name)
-VALUES ('Super Admin', 'super@demo.com', 'password', 'super_admin', @tenant1, 'Platform')
-ON DUPLICATE KEY UPDATE name = VALUES(name), role = VALUES(role);
+SELECT 'Super Admin', 'super@demo.com', 'password', 'super_admin', id, 'Platform'
+FROM companies WHERE name = 'Downtown Parking Co.' LIMIT 1
+ON CONFLICT (email) DO NOTHING;
 
 -- Company admin
 INSERT INTO users (name, email, password, role, tenant_id, company_name)
-VALUES ('Company Admin', 'admin@demo.com', 'password', 'company_admin', @tenant1, 'Downtown Parking Co.')
-ON DUPLICATE KEY UPDATE name = VALUES(name), role = VALUES(role);
+SELECT 'Company Admin', 'admin@demo.com', 'password', 'company_admin', id, 'Downtown Parking Co.'
+FROM companies WHERE name = 'Downtown Parking Co.' LIMIT 1
+ON CONFLICT (email) DO NOTHING;
 
--- Customer user
+-- Customer
 INSERT INTO users (name, email, password, role, tenant_id, company_name)
-VALUES ('John Customer', 'user@demo.com', 'password', 'customer', @tenant1, 'Downtown Parking Co.')
-ON DUPLICATE KEY UPDATE name = VALUES(name), role = VALUES(role);
+SELECT 'John Customer', 'user@demo.com', 'password', 'customer', id, 'Downtown Parking Co.'
+FROM companies WHERE name = 'Downtown Parking Co.' LIMIT 1
+ON CONFLICT (email) DO NOTHING;
 
--- Some demo slots
+-- Demo slots
 INSERT INTO slots (tenant_id, slot_number, floor, type, status, price_per_hour)
-VALUES
-  (@tenant1, 'A-01', '1', 'Car', 'available', 5.00),
-  (@tenant1, 'A-02', '1', 'Car', 'occupied', 5.00),
-  (@tenant1, 'B-01', '2', 'Bike', 'available', 3.00),
-  (@tenant1, 'C-01', '3', 'SUV', 'maintenance', 7.00)
-ON DUPLICATE KEY UPDATE price_per_hour = VALUES(price_per_hour);
-
+SELECT id, 'A-01', '1', 'Car', 'available', 5.00 FROM companies WHERE name = 'Downtown Parking Co.' LIMIT 1;
+INSERT INTO slots (tenant_id, slot_number, floor, type, status, price_per_hour)
+SELECT id, 'A-02', '1', 'Car', 'occupied', 5.00 FROM companies WHERE name = 'Downtown Parking Co.' LIMIT 1;
+INSERT INTO slots (tenant_id, slot_number, floor, type, status, price_per_hour)
+SELECT id, 'B-01', '2', 'Bike', 'available', 3.00 FROM companies WHERE name = 'Downtown Parking Co.' LIMIT 1;
+INSERT INTO slots (tenant_id, slot_number, floor, type, status, price_per_hour)
+SELECT id, 'C-01', '3', 'SUV', 'maintenance', 7.00 FROM companies WHERE name = 'Downtown Parking Co.' LIMIT 1;
