@@ -66,7 +66,7 @@ router.get("/seed-admin", async (req, res) => {
        compId = compCheck.rows[0].id;
     }
 
-    const hash = "$2b$10$QnYtoVCPoZ672BJi6COPxH9ae61gZuVMo0njbHh3XladtZ9Vx"; // 'password'
+    const hash = await bcrypt.hash("password", 10);
 
     const adminCheck = await pool.query("SELECT id FROM users WHERE email = 'admin@demo.com'");
     if (adminCheck.rows.length === 0) {
