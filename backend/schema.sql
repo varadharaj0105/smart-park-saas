@@ -77,19 +77,19 @@ ON CONFLICT DO NOTHING;
 
 -- Super admin
 INSERT INTO users (name, email, password, role, tenant_id, company_name)
-SELECT 'Super Admin', 'super@demo.com', '$2a$10$3tKovVvE9eWbAONr.1Z1F.zO78P44f5P4.hDkX6kK/W70x9S35O8G', 'super_admin', id, 'Platform'
+SELECT 'Super Admin', 'super@demo.com', '$2b$10$QnYtoVCPoZ672BJi6COPxH9ae61gZuVMo0njbHh3XladtZ9Vx', 'super_admin', id, 'Platform'
 FROM companies WHERE name = 'Downtown Parking Co.' LIMIT 1
 ON CONFLICT (email) DO NOTHING;
 
 -- Company admin
 INSERT INTO users (name, email, password, role, tenant_id, company_name)
-SELECT 'Company Admin', 'admin@demo.com', '$2a$10$3tKovVvE9eWbAONr.1Z1F.zO78P44f5P4.hDkX6kK/W70x9S35O8G', 'company_admin', id, 'Downtown Parking Co.'
+SELECT 'Company Admin', 'admin@demo.com', '$2b$10$QnYtoVCPoZ672BJi6COPxH9ae61gZuVMo0njbHh3XladtZ9Vx', 'company_admin', id, 'Downtown Parking Co.'
 FROM companies WHERE name = 'Downtown Parking Co.' LIMIT 1
 ON CONFLICT (email) DO NOTHING;
 
 -- Customer
 INSERT INTO users (name, email, password, role, tenant_id, company_name)
-SELECT 'John Customer', 'user@demo.com', '$2a$10$3tKovVvE9eWbAONr.1Z1F.zO78P44f5P4.hDkX6kK/W70x9S35O8G', 'customer', id, 'Downtown Parking Co.'
+SELECT 'John Customer', 'user@demo.com', '$2b$10$QnYtoVCPoZ672BJi6COPxH9ae61gZuVMo0njbHh3XladtZ9Vx', 'customer', id, 'Downtown Parking Co.'
 FROM companies WHERE name = 'Downtown Parking Co.' LIMIT 1
 ON CONFLICT (email) DO NOTHING;
 
