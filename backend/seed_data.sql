@@ -11,22 +11,22 @@ ON CONFLICT DO NOTHING;
 
 -- Add admin and customer users for each company
 INSERT INTO users (name, email, password, role, tenant_id, company_name)
-SELECT 'Alice Admin', 'alice@uptown.com', 'password123', 'company_admin', id, 'Uptown Parking Solutions'
+SELECT 'Alice Admin', 'alice@uptown.com', '$2a$10$3tKovVvE9eWbAONr.1Z1F.zO78P44f5P4.hDkX6kK/W70x9S35O8G', 'company_admin', id, 'Uptown Parking Solutions'
 FROM companies WHERE name = 'Uptown Parking Solutions' LIMIT 1
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO users (name, email, password, role, tenant_id, company_name)
-SELECT 'Bob User', 'bob@m.com', 'password123', 'customer', id, 'Uptown Parking Solutions'
+SELECT 'Bob User', 'bob@m.com', '$2a$10$3tKovVvE9eWbAONr.1Z1F.zO78P44f5P4.hDkX6kK/W70x9S35O8G', 'customer', id, 'Uptown Parking Solutions'
 FROM companies WHERE name = 'Uptown Parking Solutions' LIMIT 1
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO users (name, email, password, role, tenant_id, company_name)
-SELECT 'Charlie Admin', 'charlie@metro.com', 'password123', 'company_admin', id, 'Metro Park Inc.'
+SELECT 'Charlie Admin', 'charlie@metro.com', '$2a$10$3tKovVvE9eWbAONr.1Z1F.zO78P44f5P4.hDkX6kK/W70x9S35O8G', 'company_admin', id, 'Metro Park Inc.'
 FROM companies WHERE name = 'Metro Park Inc.' LIMIT 1
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO users (name, email, password, role, tenant_id, company_name)
-SELECT 'Dave User', 'dave@m.com', 'password123', 'customer', id, 'Metro Park Inc.'
+SELECT 'Dave User', 'dave@m.com', '$2a$10$3tKovVvE9eWbAONr.1Z1F.zO78P44f5P4.hDkX6kK/W70x9S35O8G', 'customer', id, 'Metro Park Inc.'
 FROM companies WHERE name = 'Metro Park Inc.' LIMIT 1
 ON CONFLICT (email) DO NOTHING;
 
