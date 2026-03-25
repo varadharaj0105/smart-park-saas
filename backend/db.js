@@ -12,6 +12,9 @@ export const pool = new Pool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   port: Number(process.env.DB_PORT) || 5432,
+  ssl: process.env.DB_HOST && process.env.DB_HOST.includes("neon.tech") 
+    ? { rejectUnauthorized: false } 
+    : false,
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
