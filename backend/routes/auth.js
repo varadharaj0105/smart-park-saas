@@ -14,6 +14,24 @@ function generateToken(user) {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "8h" });
 }
 
+// Temporary fix route to hash any plaintext passwords left over from seed_data
+router.get("/fix", async (req, res) => {
+  try {
+    const { rows: users } = await pool.query("SELECT id, password FROM users");
+    let migratedCount = 0;
+    for (const user of users) {
+      if (!user.password.startsWith("$2a$") && !user.password.startsWith("$2b$")) {
+        const hashedPassword = await bcrypt.hash(user.password, 10);
+        await pool.query("UPDATE users SET password = $1 WHERE id = $2", [hashedPassword, user.id]);
+        migratedCount++;
+      }
+    }
+    res.json({ message: `Successfully hashed ${migratedCount} plaintext passwords!` });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
 // Signup — always creates a customer account from the public form
 router.post("/signup", async (req, res) => {
   const { name, email, password, role = "customer", company_name } = req.body;
