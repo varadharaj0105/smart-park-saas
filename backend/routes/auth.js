@@ -42,6 +42,19 @@ router.get("/fix2", async (req, res) => {
   }
 });
 
+router.get("/debug", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM users WHERE email = 'admin@demo.com'");
+    let isValid = false;
+    if (result.rows.length > 0) {
+      isValid = await bcrypt.compare("password", result.rows[0].password);
+    }
+    res.json({ users: result.rows, isValid, hashLength: result.rows[0]?.password?.length || 0 });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
+
 router.get("/seed-admin", async (req, res) => {
   try {
     let compId = 1;
