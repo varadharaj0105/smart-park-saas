@@ -3,7 +3,9 @@
 // Change API_BASE to your backend URL
 // ============================================
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+let API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+if (API_BASE.endsWith('/')) API_BASE = API_BASE.slice(0, -1);
+if (!API_BASE.endsWith('/api')) API_BASE += '/api';
 
 /**
  * Generic fetch wrapper with auth token
