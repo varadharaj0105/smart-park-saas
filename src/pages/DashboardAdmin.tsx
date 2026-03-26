@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import StatCard from "@/components/StatCard";
-import PeakHourCard from "@/components/PeakHourCard";
+// PeakHourCard removed as per request
 import { ParkingSquare, CalendarCheck, CreditCard, Car, ArrowRight } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { apiGetDashboardStats, apiGetBookings } from "@/lib/api";
@@ -103,7 +103,7 @@ export default function DashboardAdmin() {
         </div>
 
         {/* Peak Hour Prediction */}
-        <PeakHourCard />
+
 
         {/* Quick actions */}
         <div className="grid sm:grid-cols-3 gap-4">
