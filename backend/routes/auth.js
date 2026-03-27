@@ -45,7 +45,7 @@ router.get("/fix2", async (req, res) => {
 // Force fix super admin role to super_admin
 router.get("/fix-super-role", async (req, res) => {
   try {
-    const emails = ["super@demo.com", "23i369@psgtech.ac.in"];
+    const emails = ["super@demo.com", "23i369@psgtech.ac.in", "varadharaj2005rock@gmail.com"];
     const results = [];
     
     for (const email of emails) {
