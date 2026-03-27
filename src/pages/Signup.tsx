@@ -76,6 +76,7 @@ export default function Signup() {
               theme="outline"
               size="large"
               width="320"
+              text="signup_with"
             />
           </div>
 
