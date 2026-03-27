@@ -1,7 +1,10 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { OAuth2Client } from "google-auth-library";
 import { pool } from "../db.js";
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const router = express.Router();
 
@@ -170,6 +173,66 @@ router.post("/signup", async (req, res) => {
     // eslint-disable-next-line no-console
     console.error("Signup error:", error.message);
     return res.status(500).json({ success: false, message: "Server error during signup" });
+  }
+});
+
+// Google Login
+router.post("/google", async (req, res) => {
+  const { credential } = req.body;
+  if (!credential) {
+    return res.status(400).json({ success: false, message: "Credential token missing" });
+  }
+
+  try {
+    // Verify the Google ID token
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { email, name, picture } = payload;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email not provided by Google" });
+    }
+
+    // Check if this email is the designated Super Admin
+    const targetEmail = "varadharaj2005rock@gmail.com";
+    if (email !== targetEmail && email !== "23i369@psgtech.ac.in") {
+      return res.status(403).json({ success: false, message: "Unauthorized Google account for this platform" });
+    }
+
+    // Check if user exists in DB
+    let userResult = await pool.query("SELECT id, name, email, role, tenant_id FROM users WHERE email = $1 LIMIT 1", [email]);
+    
+    let user;
+    if (userResult.rows.length === 0) {
+      // Auto-create if not exists (as super_admin for these specific emails)
+      const insertResult = await pool.query(
+        "INSERT INTO users (name, email, password, role, tenant_id, company_name) VALUES ($1, $2, 'OAUTH_USER', 'super_admin', 1, 'Platform') RETURNING id, name, email, role, tenant_id",
+        [name, email]
+      );
+      user = insertResult.rows[0];
+    } else {
+      user = userResult.rows[0];
+      // Ensure role is super_admin for these specific accounts even if it changed
+      if (user.role !== "super_admin") {
+         await pool.query("UPDATE users SET role = 'super_admin' WHERE id = $1", [user.id]);
+         user.role = "super_admin";
+      }
+    }
+
+    const token = generateToken(user);
+
+    return res.json({
+      success: true, token,
+      role: user.role, user_id: user.id, tenant_id: user.tenant_id,
+      name: user.name, email: user.email,
+      picture
+    });
+  } catch (error) {
+    console.error("Google verify error:", error.message);
+    return res.status(500).json({ success: false, message: "Failed to verify Google token" });
   }
 });
 

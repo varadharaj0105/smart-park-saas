@@ -57,6 +57,13 @@ export async function apiLogin(email: string, password: string) {
   });
 }
 
+export async function apiGoogleLogin(credential: string) {
+  return apiFetch("/auth/google", {
+    method: "POST",
+    body: JSON.stringify({ credential }),
+  });
+}
+
 export async function apiSignup(data: {
   name: string;
   email: string;

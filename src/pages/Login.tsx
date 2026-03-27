@@ -5,7 +5,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Car, Eye, EyeOff } from "lucide-react";
-import { apiLogin } from "@/lib/api";
+import { GoogleLogin } from "@react-oauth/google";
+import { apiLogin, apiGoogleLogin } from "@/lib/api";
 import { saveAuth, getDashboardPath, mapBackendRoleToUserRole } from "@/lib/auth";
 import { useNotification } from "@/components/NotificationProvider";
 
@@ -33,6 +34,22 @@ export default function Login() {
       navigate(getDashboardPath(mappedRole));
     } catch (err: any) {
       showNotification(err.message || "Login failed", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    if (!credentialResponse.credential) return;
+    setLoading(true);
+    try {
+      const data = await apiGoogleLogin(credentialResponse.credential);
+      const mappedRole = mapBackendRoleToUserRole(data.role);
+      saveAuth({ ...data, role: mappedRole });
+      showNotification(`Welcome back, ${data.name}!`, "success");
+      navigate(getDashboardPath(mappedRole));
+    } catch (err: any) {
+      showNotification(err.message || "Google Login failed", "error");
     } finally {
       setLoading(false);
     }
@@ -96,6 +113,26 @@ export default function Login() {
               {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border"></span>
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => showNotification("Google Sign-in failed", "error")}
+              useOneTap
+              theme="outline"
+              shape="pill"
+              width="320"
+            />
+          </div>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             Don't have an account?{" "}

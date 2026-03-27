@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import { NotificationProvider } from "@/components/NotificationProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -26,45 +27,47 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <ThemeProvider>
-        <NotificationProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
+  <GoogleOAuthProvider clientId="142858706023-li961a10f1gpasdrtfi4jl0vdu0absg0.apps.googleusercontent.com">
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <ThemeProvider>
+          <NotificationProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Landing />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
 
-              {/* Super Admin Routes */}
-              <Route path="/dashboard/superadmin" element={<ProtectedRoute allowedRoles={["superadmin"]}><DashboardSuperAdmin /></ProtectedRoute>} />
-              <Route path="/companies" element={<ProtectedRoute allowedRoles={["superadmin"]}><Companies /></ProtectedRoute>} />
-              <Route path="/companies/:id" element={<ProtectedRoute allowedRoles={["superadmin"]}><CompanyDetails /></ProtectedRoute>} />
-              <Route path="/users" element={<ProtectedRoute allowedRoles={["superadmin"]}><Users /></ProtectedRoute>} />
+                {/* Super Admin Routes */}
+                <Route path="/dashboard/superadmin" element={<ProtectedRoute allowedRoles={["superadmin"]}><DashboardSuperAdmin /></ProtectedRoute>} />
+                <Route path="/companies" element={<ProtectedRoute allowedRoles={["superadmin"]}><Companies /></ProtectedRoute>} />
+                <Route path="/companies/:id" element={<ProtectedRoute allowedRoles={["superadmin"]}><CompanyDetails /></ProtectedRoute>} />
+                <Route path="/users" element={<ProtectedRoute allowedRoles={["superadmin"]}><Users /></ProtectedRoute>} />
 
-              {/* Admin Routes */}
-              <Route path="/dashboard/admin" element={<ProtectedRoute allowedRoles={["admin"]}><DashboardAdmin /></ProtectedRoute>} />
-              <Route path="/slots" element={<ProtectedRoute allowedRoles={["admin"]}><Slots /></ProtectedRoute>} />
+                {/* Admin Routes */}
+                <Route path="/dashboard/admin" element={<ProtectedRoute allowedRoles={["admin"]}><DashboardAdmin /></ProtectedRoute>} />
+                <Route path="/slots" element={<ProtectedRoute allowedRoles={["admin"]}><Slots /></ProtectedRoute>} />
 
-              {/* User Routes */}
-              <Route path="/dashboard/user" element={<ProtectedRoute allowedRoles={["user"]}><DashboardUser /></ProtectedRoute>} />
-              <Route path="/booking" element={<ProtectedRoute allowedRoles={["user"]}><Booking /></ProtectedRoute>} />
+                {/* User Routes */}
+                <Route path="/dashboard/user" element={<ProtectedRoute allowedRoles={["user"]}><DashboardUser /></ProtectedRoute>} />
+                <Route path="/booking" element={<ProtectedRoute allowedRoles={["user"]}><Booking /></ProtectedRoute>} />
 
-              {/* Shared Protected Routes */}
-              <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
-              <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-              <Route path="/booking-history" element={<ProtectedRoute allowedRoles={["admin", "user"]}><BookingHistory /></ProtectedRoute>} />
-              <Route path="/map" element={<ProtectedRoute><ParkingMap /></ProtectedRoute>} />
+                {/* Shared Protected Routes */}
+                <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
+                <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                <Route path="/booking-history" element={<ProtectedRoute allowedRoles={["admin", "user"]}><BookingHistory /></ProtectedRoute>} />
+                <Route path="/map" element={<ProtectedRoute><ParkingMap /></ProtectedRoute>} />
 
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </NotificationProvider>
-      </ThemeProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </NotificationProvider>
+        </ThemeProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </GoogleOAuthProvider>
 );
 
 export default App;
