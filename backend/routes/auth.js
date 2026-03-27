@@ -42,6 +42,21 @@ router.get("/fix2", async (req, res) => {
   }
 });
 
+// Force fix super admin role to super_admin
+router.get("/fix-super-role", async (req, res) => {
+  try {
+    await pool.query("UPDATE users SET role = 'super_admin' WHERE email = 'super@demo.com'");
+    const result = await pool.query("SELECT email, role FROM users WHERE email = 'super@demo.com'");
+    res.json({ 
+      success: true, 
+      message: "Super Admin role has been force-reset to 'super_admin'",
+      userData: result.rows[0]
+    });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
 router.get("/debug", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM users WHERE email = 'admin@demo.com'");
