@@ -83,17 +83,19 @@ router.get("/bookings", async (req, res) => {
 
     if (req.user.role === "customer") {
       query = `
-        SELECT b.*, c.name as company_name
+        SELECT b.*, c.name as company_name, s.price_per_hour
         FROM bookings b
         LEFT JOIN companies c ON b.tenant_id = c.id
+        LEFT JOIN slots s ON b.slot_id = s.id
         WHERE b.user_id = $1
         ORDER BY b.start_time DESC`;
       params = [req.user.id];
     } else {
       query = `
-        SELECT b.*, c.name as company_name
+        SELECT b.*, c.name as company_name, s.price_per_hour
         FROM bookings b
         LEFT JOIN companies c ON b.tenant_id = c.id
+        LEFT JOIN slots s ON b.slot_id = s.id
         WHERE b.tenant_id = $1
         ORDER BY b.start_time DESC`;
       params = [req.user.tenant_id];

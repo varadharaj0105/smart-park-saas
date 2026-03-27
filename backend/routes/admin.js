@@ -97,6 +97,19 @@ router.get("/dashboard/stats", async (req, res) => {
       [tenantId]
     );
 
+    // Get weekly revenue breakdown (last 7 days)
+    const weeklyRevenueRes = await pool.query(
+      `SELECT 
+         TO_CHAR(created_at, 'Dy') AS name,
+         SUM(amount) AS revenue,
+         MIN(created_at) as date_val
+       FROM payments 
+       WHERE tenant_id = $1 AND created_at >= NOW() - INTERVAL '7 days'
+       GROUP BY TO_CHAR(created_at, 'Dy'), DATE(created_at)
+       ORDER BY date_val ASC`,
+      [tenantId]
+    );
+
     const slotRow = slotRes.rows[0];
     const bookingRow = bookingRes.rows[0];
     const revenueRow = revenueRes.rows[0];
@@ -108,6 +121,10 @@ router.get("/dashboard/stats", async (req, res) => {
         availableSlots: Number(slotRow.availableSlots || 0),
         totalBookings: Number(bookingRow.totalBookings || 0),
         totalRevenue: Number(revenueRow.totalRevenue || 0),
+        weeklyRevenue: weeklyRevenueRes.rows.map(r => ({
+          name: r.name,
+          revenue: Number(r.revenue || 0)
+        })),
       },
     });
   } catch (error) {

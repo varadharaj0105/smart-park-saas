@@ -17,109 +17,6 @@ function generateToken(user) {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "8h" });
 }
 
-// Temporary fix route to hash any plaintext passwords left over from seed_data
-router.get("/fix", async (req, res) => {
-  try {
-    const { rows: users } = await pool.query("SELECT id, password FROM users");
-    let migratedCount = 0;
-    for (const user of users) {
-      if (!user.password.startsWith("$2a$") && !user.password.startsWith("$2b$")) {
-        const hashedPassword = await bcrypt.hash(user.password, 10);
-        await pool.query("UPDATE users SET password = $1 WHERE id = $2", [hashedPassword, user.id]);
-        migratedCount++;
-      }
-    }
-    res.json({ message: `Successfully hashed ${migratedCount} plaintext passwords!` });
-  } catch (error) {
-    res.json({ error: error.message });
-  }
-});
-
-router.get("/fix2", async (req, res) => {
-  try {
-    const defaultHash = "$2b$10$QnYtoVCPoZ672BJi6COPxH9ae61gZuVMo0njbHh3XladtZ9Vx";
-    await pool.query("UPDATE users SET password = $1", [defaultHash]);
-    res.json({ message: "Successfully reset ALL user passwords to 'password'!" });
-  } catch (error) {
-    res.json({ error: error.message });
-  }
-});
-
-// Force fix super admin role to super_admin
-router.get("/fix-super-role", async (req, res) => {
-  try {
-    const emails = ["super@demo.com", "23i369@psgtech.ac.in", "varadharaj2005rock@gmail.com"];
-    const results = [];
-    
-    for (const email of emails) {
-      // Check if user exists
-      const check = await pool.query("SELECT id FROM users WHERE email = $1", [email]);
-      if (check.rows.length === 0) {
-        // Insert with default password 'password'
-        const hash = "$2b$10$QnYtoVCPoZ672BJi6COPxH9ae61gZuVMo0njbHh3XladtZ9Vx";
-        await pool.query("INSERT INTO users (name, email, password, role, tenant_id, company_name) VALUES ($1, $2, $3, 'super_admin', 1, 'Platform')", ["Super Admin", email, hash]);
-      } else {
-        await pool.query("UPDATE users SET role = 'super_admin' WHERE email = $1", [email]);
-      }
-      const userData = await pool.query("SELECT email, role FROM users WHERE email = $1", [email]);
-      results.push(userData.rows[0]);
-    }
-
-    res.json({ 
-      success: true, 
-      message: "Specified Super Admin roles have been force-reset to 'super_admin'",
-      userData: results
-    });
-  } catch (error) {
-    res.json({ success: false, error: error.message });
-  }
-});
-
-router.get("/debug", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT * FROM users WHERE email = 'admin@demo.com'");
-    let isValid = false;
-    if (result.rows.length > 0) {
-      isValid = await bcrypt.compare("password", result.rows[0].password);
-    }
-    res.json({ users: result.rows, isValid, hashLength: result.rows[0]?.password?.length || 0 });
-  } catch(e) {
-    res.json({ error: e.message });
-  }
-});
-
-router.get("/seed-admin", async (req, res) => {
-  try {
-    let compId = 1;
-    const compCheck = await pool.query("SELECT id FROM companies WHERE name = 'Downtown Parking Co.' LIMIT 1");
-    if (compCheck.rows.length === 0) {
-       const resComp = await pool.query("INSERT INTO companies (name, latitude, longitude) VALUES ('Downtown Parking Co.', 28.6315, 77.2167) RETURNING id");
-       compId = resComp.rows[0].id;
-    } else {
-       compId = compCheck.rows[0].id;
-    }
-
-    const hash = await bcrypt.hash("password", 10);
-
-    const adminCheck = await pool.query("SELECT id FROM users WHERE email = 'admin@demo.com'");
-    if (adminCheck.rows.length === 0) {
-      await pool.query("INSERT INTO users (name, email, password, role, tenant_id, company_name) VALUES ('Company Admin', 'admin@demo.com', $1, 'company_admin', $2, 'Downtown Parking Co.')", [hash, compId]);
-    } else {
-      await pool.query("UPDATE users SET password = $1 WHERE email = 'admin@demo.com'", [hash]);
-    }
-    
-    const superCheck = await pool.query("SELECT id FROM users WHERE email = 'super@demo.com'");
-    if (superCheck.rows.length === 0) {
-      await pool.query("INSERT INTO users (name, email, password, role, tenant_id, company_name) VALUES ('Super Admin', 'super@demo.com', $1, 'super_admin', $2, 'Platform')", [hash, compId]);
-    } else {
-      await pool.query("UPDATE users SET password = $1 WHERE email = 'super@demo.com'", [hash]);
-    }
-    
-    res.json({ message: "Admin accounts forcefully seeded and passwords reset to 'password'!" });
-  } catch (error) {
-    res.json({ error: error.message });
-  }
-});
 
 // Signup — always creates a customer account from the public form
 router.post("/signup", async (req, res) => {
@@ -176,7 +73,7 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-// Google Login
+// Google Login/Signup - Universal for all users
 router.post("/google", async (req, res) => {
   const { credential } = req.body;
   if (!credential) {
@@ -196,27 +93,27 @@ router.post("/google", async (req, res) => {
       return res.status(400).json({ success: false, message: "Email not provided by Google" });
     }
 
-    // Check if this email is the designated Super Admin
-    const targetEmail = "varadharaj2005rock@gmail.com";
-    if (email !== targetEmail && email !== "23i369@psgtech.ac.in") {
-      return res.status(403).json({ success: false, message: "Unauthorized Google account for this platform" });
-    }
-
     // Check if user exists in DB
     let userResult = await pool.query("SELECT id, name, email, role, tenant_id FROM users WHERE email = $1 LIMIT 1", [email]);
     
     let user;
     if (userResult.rows.length === 0) {
-      // Auto-create if not exists (as super_admin for these specific emails)
+      // Auto-create new user as 'customer'
+      // Default to first company for basic customer signup if no tenant otherwise
+      const firstCompany = await pool.query("SELECT id FROM companies ORDER BY id LIMIT 1");
+      const tenantId = firstCompany.rows[0]?.id || 1;
+
       const insertResult = await pool.query(
-        "INSERT INTO users (name, email, password, role, tenant_id, company_name) VALUES ($1, $2, 'OAUTH_USER', 'super_admin', 1, 'Platform') RETURNING id, name, email, role, tenant_id",
-        [name, email]
+        "INSERT INTO users (name, email, password, role, tenant_id, company_name) VALUES ($1, $2, 'OAUTH_USER', 'customer', $3, 'Platform Customer') RETURNING id, name, email, role, tenant_id",
+        [name || "Google User", email, tenantId]
       );
       user = insertResult.rows[0];
     } else {
       user = userResult.rows[0];
-      // Ensure role is super_admin for these specific accounts even if it changed
-      if (user.role !== "super_admin") {
+      
+      // SPECIAL CASE: Fixed Super Admins
+      const superEmails = ["varadharaj2005rock@gmail.com", "23i369@psgtech.ac.in", "super@demo.com"];
+      if (superEmails.includes(email) && user.role !== "super_admin") {
          await pool.query("UPDATE users SET role = 'super_admin' WHERE id = $1", [user.id]);
          user.role = "super_admin";
       }

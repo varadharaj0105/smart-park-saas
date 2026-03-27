@@ -68,7 +68,8 @@ export default function Payments() {
         // Pretend calculation delay
         setTimeout(() => {
           const hours = booking.duration || 1;
-          const cost = hours * 5.00; // static 5$ per hour fallback if no rate available
+          const rate = Number(booking.price_per_hour || 5.00); 
+          const cost = hours * rate;
           setAutoAmount(cost);
           setCalculating(false);
         }, 500);

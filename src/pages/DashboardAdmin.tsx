@@ -12,18 +12,19 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { apiGetDashboardStats, apiGetBookings } from "@/lib/api";
 
 export default function DashboardAdmin() {
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<any>({
     totalSlots: 0,
     availableSlots: 0,
     totalBookings: 0,
     totalRevenue: 0,
+    weeklyRevenue: [],
   });
   const [recentBookings, setRecentBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
-      apiGetDashboardStats().catch(() => ({ data: { totalSlots: 0, availableSlots: 0, totalBookings: 0, totalRevenue: 0 } })),
+      apiGetDashboardStats().catch(() => ({ data: { totalSlots: 0, availableSlots: 0, totalBookings: 0, totalRevenue: 0, weeklyRevenue: [] } })),
       apiGetBookings().catch(() => ({ data: [] }))
     ]).then(([statsRes, bookingsRes]) => {
       setStats(statsRes.data || statsRes);
@@ -35,7 +36,7 @@ export default function DashboardAdmin() {
       setLoading(false);
     });
   }, []);
-  // In case available slots somehow exceeds total slots
+
   const occupied = Math.max(0, stats.totalSlots - stats.availableSlots);
   const available = Math.max(0, stats.availableSlots);
   const slotUsage = [
@@ -43,12 +44,9 @@ export default function DashboardAdmin() {
     { name: "Occupied", value: occupied, color: "hsl(234, 80%, 60%)" },
   ];
 
-  // Dummy revenue data just for visual aesthetics
-  const revenueData = [
-    { name: "Mon", revenue: 520 }, { name: "Tue", revenue: 680 },
-    { name: "Wed", revenue: 590 }, { name: "Thu", revenue: 820 },
-    { name: "Fri", revenue: 940 }, { name: "Sat", revenue: 450 },
-    { name: "Sun", revenue: 330 },
+  // Default fallback if no revenue data yet
+  const revenueData = stats.weeklyRevenue?.length > 0 ? stats.weeklyRevenue : [
+    { name: "No Data", revenue: 0 }
   ];
 
   return (

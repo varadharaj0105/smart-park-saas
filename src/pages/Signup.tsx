@@ -5,7 +5,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Car } from "lucide-react";
-import { apiSignup } from "@/lib/api";
+import { GoogleLogin } from "@react-oauth/google";
+import { apiSignup, apiGoogleLogin } from "@/lib/api";
 import { useNotification } from "@/components/NotificationProvider";
 
 export default function Signup() {
@@ -13,6 +14,22 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { showNotification } = useNotification();
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    setLoading(true);
+    try {
+      const res = await apiGoogleLogin(credentialResponse.credential);
+      if (res.success) {
+        showNotification("Account created and logged in via Google!", "success");
+        // Redirect based on role
+        navigate(`/dashboard/${res.role || "user"}`);
+      }
+    } catch (err: any) {
+      showNotification(err.message || "Google signup failed", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const update = (key: string, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -37,8 +54,8 @@ export default function Signup() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
+      <div className="w-full max-w-md text-center">
+        <div className="mb-8 flex justify-center">
           <Link to="/" className="inline-flex items-center gap-2">
             <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
               <Car className="h-6 w-6 text-primary-foreground" />
@@ -47,9 +64,29 @@ export default function Signup() {
           </Link>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-8 shadow-sm">
+        <div className="bg-card border border-border rounded-xl p-8 shadow-sm text-left">
           <h2 className="text-2xl font-bold text-foreground mb-1">Create account</h2>
           <p className="text-sm text-muted-foreground mb-6">Register to start booking parking slots</p>
+
+          <div className="w-full flex justify-center mb-6">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => showNotification("Google Login Failed", "error")}
+              useOneTap
+              theme="outline"
+              size="large"
+              width="320"
+            />
+          </div>
+
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+            </div>
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
