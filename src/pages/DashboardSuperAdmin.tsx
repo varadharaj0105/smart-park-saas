@@ -221,16 +221,16 @@ export default function DashboardSuperAdmin() {
                     >
                         {r === "daily" ? "Today" : r === "weekly" ? "7 Days" : "30 Days"}
                     </button>
-                )}
+                ))}
             </div>
         </div>
 
         {/* Stats */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard title="Total Companies" value={stats.totalCompanies} icon={Building2} color="text-primary" />
-          <StatCard title="Total Customers" value={stats.totalUsers} icon={Users} color="text-blue-500" />
-          <StatCard title="Total Bookings" value={stats.totalBookings} icon={CalendarCheck} color="text-purple-500" />
-          <StatCard title="Platform Revenue" value={`$${stats.totalRevenue.toFixed(2)}`} icon={CreditCard} color="text-emerald-500" />
+          <StatCard title="Total Companies" value={stats.totalCompanies} icon={Building2} />
+          <StatCard title="Total Customers" value={stats.totalUsers} icon={Users} />
+          <StatCard title="Total Bookings" value={stats.totalBookings} icon={CalendarCheck} />
+          <StatCard title="Platform Revenue" value={`$${stats.totalRevenue.toFixed(2)}`} icon={CreditCard} />
         </div>
 
         {/* Charts */}

@@ -75,15 +75,15 @@ export default function DashboardAdmin() {
                     >
                         {r === "daily" ? "Today" : r === "weekly" ? "7 Days" : "30 Days"}
                     </button>
-                )}
+                ))}
             </div>
         </div>
 
         {/* Stats */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard title="Total Slots" value={stats.totalSlots} icon={ParkingSquare} description="All parking slots" />
-          <StatCard title="Available Now" value={stats.availableSlots} icon={Car} color="text-success" />
-          <StatCard title={`${range === 'daily' ? 'Today' : range === 'weekly' ? 'Weekly' : 'Monthly'} Revenue`} value={`$${rangeTotal.toFixed(2)}`} icon={TrendingUp} color="text-primary" />
+          <StatCard title="Available Now" value={stats.availableSlots} icon={Car} />
+          <StatCard title={`${range === 'daily' ? 'Today' : range === 'weekly' ? 'Weekly' : 'Monthly'} Revenue`} value={`$${rangeTotal.toFixed(2)}`} icon={TrendingUp} />
           <StatCard title="Total Revenue" value={`$${Number(stats.totalRevenue).toFixed(2)}`} icon={CreditCard} description="All-time earnings" />
         </div>
 
