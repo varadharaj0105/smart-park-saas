@@ -245,4 +245,89 @@ router.get("/payments", async (req, res) => {
   }
 });
 
+// Global Dashboard stats
+router.get("/dashboard/stats", async (req, res) => {
+  try {
+    // 1. Basic Platform Totals
+    const companyRes = await pool.query("SELECT COUNT(*) AS count FROM companies");
+    const userRes = await pool.query("SELECT COUNT(*) AS count FROM users WHERE role = 'customer'");
+    const bookingRes = await pool.query("SELECT COUNT(*) AS count FROM bookings");
+    const totalRevRes = await pool.query("SELECT COALESCE(SUM(amount), 0) AS total FROM payments");
+
+    // 2. Platform Revenue Breakdown
+    
+    // DAILY (Grouped by hour)
+    const dailyRevenueRes = await pool.query(
+      `SELECT 
+         TO_CHAR(created_at, 'HH24:00') AS name,
+         SUM(amount) AS revenue,
+         MIN(created_at) as sort_val
+       FROM payments 
+       WHERE created_at >= NOW() - INTERVAL '24 hours'
+       GROUP BY TO_CHAR(created_at, 'HH24:00')
+       ORDER BY sort_val ASC`
+    );
+
+    // WEEKLY (Grouped by day)
+    const weeklyRevenueRes = await pool.query(
+      `SELECT 
+         TO_CHAR(created_at, 'Dy') AS name,
+         SUM(amount) AS revenue,
+         MIN(created_at) as sort_val
+       FROM payments 
+       WHERE created_at >= NOW() - INTERVAL '7 days'
+       GROUP BY TO_CHAR(created_at, 'Dy'), DATE(created_at)
+       ORDER BY sort_val ASC`
+    );
+
+    // MONTHLY (Grouped by day)
+    const monthlyRevenueRes = await pool.query(
+      `SELECT 
+         TO_CHAR(created_at, 'DD Mon') AS name,
+         SUM(amount) AS revenue,
+         MIN(created_at) as sort_val
+       FROM payments 
+       WHERE created_at >= NOW() - INTERVAL '30 days'
+       GROUP BY TO_CHAR(created_at, 'DD Mon'), DATE(created_at)
+       ORDER BY sort_val ASC`
+    );
+
+    // Company Comparison (Top 10)
+    const companyComparisonRes = await pool.query(
+      `SELECT c.name, SUM(p.amount) as revenue
+       FROM payments p
+       JOIN companies c ON p.tenant_id = c.id
+       GROUP BY c.name
+       ORDER BY revenue DESC
+       LIMIT 10`
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        totalCompanies: Number(companyRes.rows[0].count),
+        totalUsers: Number(userRes.rows[0].count),
+        totalBookings: Number(bookingRes.rows[0].count),
+        totalRevenue: Number(totalRevRes.rows[0].total),
+        dailyRevenue: {
+          chart: dailyRevenueRes.rows.map(r => ({ name: r.name, revenue: Number(r.revenue) }))
+        },
+        weeklyRevenue: {
+          chart: weeklyRevenueRes.rows.map(r => ({ name: r.name, revenue: Number(r.revenue) }))
+        },
+        monthlyRevenue: {
+          chart: monthlyRevenueRes.rows.map(r => ({ name: r.name, revenue: Number(r.revenue) }))
+        },
+        companyComparison: companyComparisonRes.rows.map(r => ({
+           name: r.name.split(' ')[0], // Short name for chart
+           revenue: Number(r.revenue)
+        }))
+      }
+    });
+  } catch (error) {
+    console.error("Super dashboard stats error:", error.message);
+    return res.status(500).json({ success: false, message: "Failed to load platform stats" });
+  }
+});
+
 export default router;

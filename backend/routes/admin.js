@@ -80,10 +80,11 @@ router.get("/dashboard/stats", async (req, res) => {
   try {
     const tenantId = req.user.tenant_id;
 
+    // 1. Basic totals
     const slotRes = await pool.query(
       `SELECT COUNT(*) AS "totalSlots",
-              SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) AS "availableSlots"
-       FROM slots WHERE tenant_id = $1`,
+               SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) AS "availableSlots"
+        FROM slots WHERE tenant_id = $1`,
       [tenantId]
     );
 
@@ -92,39 +93,75 @@ router.get("/dashboard/stats", async (req, res) => {
       [tenantId]
     );
 
-    const revenueRes = await pool.query(
-      `SELECT COALESCE(SUM(amount), 0) AS "totalRevenue" FROM payments WHERE tenant_id = $1`,
+    // 2. Revenue Breakdown (Daily, Weekly, Monthly)
+    
+    // DAILY (Last 24 hours, grouped by hour)
+    const dailyRevenueRes = await pool.query(
+      `SELECT 
+         TO_CHAR(created_at, 'HH24:00') AS name,
+         SUM(amount) AS revenue,
+         MIN(created_at) as sort_val
+       FROM payments 
+       WHERE tenant_id = $1 AND created_at >= NOW() - INTERVAL '24 hours'
+       GROUP BY TO_CHAR(created_at, 'HH24:00')
+       ORDER BY sort_val ASC`,
       [tenantId]
     );
 
-    // Get weekly revenue breakdown (last 7 days)
+    // WEEKLY (Last 7 days, grouped by day)
     const weeklyRevenueRes = await pool.query(
       `SELECT 
          TO_CHAR(created_at, 'Dy') AS name,
          SUM(amount) AS revenue,
-         MIN(created_at) as date_val
+         MIN(created_at) as sort_val
        FROM payments 
        WHERE tenant_id = $1 AND created_at >= NOW() - INTERVAL '7 days'
        GROUP BY TO_CHAR(created_at, 'Dy'), DATE(created_at)
-       ORDER BY date_val ASC`,
+       ORDER BY sort_val ASC`,
       [tenantId]
     );
 
-    const slotRow = slotRes.rows[0];
-    const bookingRow = bookingRes.rows[0];
-    const revenueRow = revenueRes.rows[0];
+    // MONTHLY (Last 30 days, grouped by day)
+    const monthlyRevenueRes = await pool.query(
+      `SELECT 
+         TO_CHAR(created_at, 'DD Mon') AS name,
+         SUM(amount) AS revenue,
+         MIN(created_at) as sort_val
+       FROM payments 
+       WHERE tenant_id = $1 AND created_at >= NOW() - INTERVAL '30 days'
+       GROUP BY TO_CHAR(created_at, 'DD Mon'), DATE(created_at)
+       ORDER BY sort_val ASC`,
+      [tenantId]
+    );
+
+    // Totals for summary cards
+    const dailyTotal = dailyRevenueRes.rows.reduce((sum, r) => sum + Number(r.revenue), 0);
+    const weeklyTotal = weeklyRevenueRes.rows.reduce((sum, r) => sum + Number(r.revenue), 0);
+    const monthlyTotal = monthlyRevenueRes.rows.reduce((sum, r) => sum + Number(r.revenue), 0);
+    const totalRevenueAllTime = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE tenant_id = $1`,
+      [tenantId]
+    );
 
     return res.json({
       success: true,
       data: {
-        totalSlots: Number(slotRow.totalSlots || 0),
-        availableSlots: Number(slotRow.availableSlots || 0),
-        totalBookings: Number(bookingRow.totalBookings || 0),
-        totalRevenue: Number(revenueRow.totalRevenue || 0),
-        weeklyRevenue: weeklyRevenueRes.rows.map(r => ({
-          name: r.name,
-          revenue: Number(r.revenue || 0)
-        })),
+        totalSlots: Number(slotRes.rows[0].totalSlots || 0),
+        availableSlots: Number(slotRes.rows[0].availableSlots || 0),
+        totalBookings: Number(bookingRes.rows[0].totalBookings || 0),
+        totalRevenue: Number(totalRevenueAllTime.rows[0].total || 0),
+        dailyRevenue: {
+          total: dailyTotal,
+          chart: dailyRevenueRes.rows.map(r => ({ name: r.name, revenue: Number(r.revenue) }))
+        },
+        weeklyRevenue: {
+          total: weeklyTotal,
+          chart: weeklyRevenueRes.rows.map(r => ({ name: r.name, revenue: Number(r.revenue) }))
+        },
+        monthlyRevenue: {
+          total: monthlyTotal,
+          chart: monthlyRevenueRes.rows.map(r => ({ name: r.name, revenue: Number(r.revenue) }))
+        }
       },
     });
   } catch (error) {

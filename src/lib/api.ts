@@ -170,6 +170,10 @@ export async function apiGetDashboardStats() {
   return apiFetch("/admin/dashboard/stats");
 }
 
+export async function apiGetSuperDashboardStats() {
+  return apiFetch("/super/dashboard/stats");
+}
+
 export async function apiGetCompanies() {
   return apiFetch("/super/companies");
 }
