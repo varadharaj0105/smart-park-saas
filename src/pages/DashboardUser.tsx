@@ -83,7 +83,7 @@ export default function DashboardUser() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard title="Total Bookings" value={stats.totalBookings} icon={CalendarCheck} />
           <StatCard title="Active" value={stats.activeBookings} icon={ParkingSquare} />
-          <StatCard title="Total Spent" value={`$${Number(stats.totalSpent).toFixed(2)}`} icon={CreditCard} />
+          <StatCard title="Total Spent" value={`₹${Number(stats.totalSpent).toFixed(2)}`} icon={CreditCard} />
           <StatCard title="Available Locations" value={companies.length} icon={Building2} />
         </div>
 

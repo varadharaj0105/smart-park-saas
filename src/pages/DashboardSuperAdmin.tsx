@@ -230,7 +230,7 @@ export default function DashboardSuperAdmin() {
           <StatCard title="Total Companies" value={stats.totalCompanies} icon={Building2} />
           <StatCard title="Total Customers" value={stats.totalUsers} icon={Users} />
           <StatCard title="Total Bookings" value={stats.totalBookings} icon={CalendarCheck} />
-          <StatCard title="Platform Revenue" value={`$${stats.totalRevenue.toFixed(2)}`} icon={CreditCard} />
+          <StatCard title="Platform Revenue" value={`₹${stats.totalRevenue.toFixed(2)}`} icon={CreditCard} />
         </div>
 
         {/* Charts */}
@@ -253,7 +253,7 @@ export default function DashboardSuperAdmin() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                   <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value) => `$${value}`} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value) => `₹${value}`} />
                   <Tooltip
                     contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
                   />

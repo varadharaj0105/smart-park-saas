@@ -82,7 +82,7 @@ export default function BookingHistory() {
           <button
             onClick={() => exportToCSV(
               "bookings_report",
-              ["ID", "Vehicle", "Slot", "Company", "Date", "Duration (hrs)", "Cost ($)", "Status"],
+              ["ID", "Vehicle", "Slot", "Company", "Date", "Duration (hrs)", "Cost (₹)", "Status"],
               ["id", "vehicle_number", "slot_id", "company_name", "start_time", "duration", "total_amount", "status"],
               filtered.map(b => ({ ...b, start_time: new Date(b.start_time).toLocaleDateString(), total_amount: b.total_amount != null ? Number(b.total_amount).toFixed(2) : "" }))
             )}
@@ -154,7 +154,7 @@ export default function BookingHistory() {
                       </td>
                       <td className="px-6 py-3 text-muted-foreground">{b.duration}h</td>
                       <td className="px-6 py-3 font-semibold text-foreground">
-                        {b.total_amount != null ? `$${Number(b.total_amount).toFixed(2)}` : "-"}
+                        {b.total_amount != null ? `₹${Number(b.total_amount).toFixed(2)}` : "—"}
                       </td>
                       <td className="px-6 py-3">
                         <div className="flex items-center gap-2">

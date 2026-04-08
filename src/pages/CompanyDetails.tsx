@@ -97,7 +97,7 @@ export default function CompanyDetails() {
 
                             <div className="bg-card border border-border rounded-xl p-5 flex flex-col justify-center items-center text-center">
                                 <CreditCard className="h-8 w-8 text-success mb-2" />
-                                <div className="text-3xl font-bold text-success">${Number(stats.total_revenue).toFixed(2)}</div>
+                                <div className="text-3xl font-bold text-success">₹{Number(stats.total_revenue).toFixed(2)}</div>
                                 <div className="text-sm text-muted-foreground">Total Revenue</div>
                             </div>
                         </div>
@@ -124,7 +124,7 @@ export default function CompanyDetails() {
                                         <tbody className="text-sm">
                                             {payments.map(payment => (
                                                 <tr key={payment.id} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
-                                                    <td className="py-3 font-medium">${Number(payment.amount).toFixed(2)}</td>
+                                                    <td className="py-3 font-medium">₹{Number(payment.amount).toFixed(2)}</td>
                                                     <td className="py-3">
                                                         <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${payment.status === 'completed' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
                                                             {payment.status}

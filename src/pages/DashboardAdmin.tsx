@@ -83,8 +83,8 @@ export default function DashboardAdmin() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard title="Total Slots" value={stats.totalSlots} icon={ParkingSquare} description="All parking slots" />
           <StatCard title="Available Now" value={stats.availableSlots} icon={Car} />
-          <StatCard title={`${range === 'daily' ? 'Today' : range === 'weekly' ? 'Weekly' : 'Monthly'} Revenue`} value={`$${rangeTotal.toFixed(2)}`} icon={TrendingUp} />
-          <StatCard title="Total Revenue" value={`$${Number(stats.totalRevenue).toFixed(2)}`} icon={CreditCard} description="All-time earnings" />
+          <StatCard title={`${range === 'daily' ? 'Today' : range === 'weekly' ? 'Weekly' : 'Monthly'} Revenue`} value={`₹${rangeTotal.toFixed(2)}`} icon={TrendingUp} />
+          <StatCard title="Total Revenue" value={`₹${Number(stats.totalRevenue).toFixed(2)}`} icon={CreditCard} description="All-time earnings" />
         </div>
 
         {/* Charts */}
@@ -108,7 +108,7 @@ export default function DashboardAdmin() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                   <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value) => `$${value}`} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value) => `₹${value}`} />
                   <Tooltip
                     contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
                   />
@@ -118,7 +118,7 @@ export default function DashboardAdmin() {
                 <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                     <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value) => `$${value}`} />
+                    <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value) => `₹${value}`} />
                     <Tooltip
                         cursor={{fill: 'hsl(var(--muted))', opacity: 0.4}}
                         contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}

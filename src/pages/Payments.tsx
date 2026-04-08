@@ -146,7 +146,7 @@ export default function Payments() {
             <button
               onClick={() => exportToCSV(
                 "payments_report",
-                ["ID", "Booking ID", role === "superadmin" ? "Company" : "", "Amount ($)", "Method", "Status", "Date"]
+                ["ID", "Booking ID", role === "superadmin" ? "Company" : "", "Amount (₹)", "Method", "Status", "Date"]
                   .filter(Boolean) as string[],
                 ["id", "booking_id", ...(role === "superadmin" ? ["company_name"] : []), "amount", "method", "status", "created_at"],
                 filtered.map(p => ({ ...p, created_at: new Date(p.created_at).toLocaleDateString() }))
@@ -171,7 +171,7 @@ export default function Payments() {
           <StatCard
             title="Total Revenue"
             value={
-              "$" +
+              "₹" +
               payments
                 .filter((p) => p.status === "paid")
                 .reduce((sum, p) => sum + Number(p.amount), 0)
@@ -218,7 +218,7 @@ export default function Payments() {
                     <td className="px-6 py-3 font-medium text-foreground">{p.id}</td>
                     <td className="px-6 py-3 text-foreground">{p.booking_id}</td>
                     {role === "superadmin" && <td className="px-6 py-3 font-medium text-foreground">{(p as any).company_name || "—"}</td>}
-                    <td className="px-6 py-3 font-semibold text-foreground">${Number(p.amount).toFixed(2)}</td>
+                    <td className="px-6 py-3 font-semibold text-foreground">₹{Number(p.amount).toFixed(2)}</td>
                     <td className="px-6 py-3">
                       <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
                         {p.method}
@@ -280,14 +280,14 @@ export default function Payments() {
                 </div>
                 <div>
                   <div className="flex justify-between mb-1.5">
-                    <label className="text-sm font-medium text-foreground">Amount to Pay ($)</label>
+                    <label className="text-sm font-medium text-foreground">Amount to Pay (₹)</label>
                     <span className="text-xs text-muted-foreground">Auto-calculated</span>
                   </div>
                   <div className="w-full h-10 px-3 flex items-center bg-muted rounded-lg border border-border text-foreground text-sm font-semibold">
                     {calculating ? (
                       <span className="flex items-center gap-2"><div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" /> Calculating...</span>
                     ) : (
-                      `$${autoAmount.toFixed(2)}`
+                      `₹${autoAmount.toFixed(2)}`
                     )}
                   </div>
                 </div>
